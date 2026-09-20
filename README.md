@@ -18,7 +18,7 @@ The interface is intended for early organic chemistry work where the useful ques
 
 ## Stack
 
-- one \`index.html\`
+- one `index.html`
 - vanilla JavaScript
 - inline CSS
 - SVG for the teaching/connectivity diagram
@@ -29,33 +29,33 @@ The interface is intended for early organic chemistry work where the useful ques
 
 From the repo directory:
 
-\`\`\`bash
+```bash
 python3 -m http.server 8000
-\`\`\`
+```
 
 Then open:
 
-\`\`\`
+```text
 http://localhost:8000
-\`\`\`
+```
 
 You can also use:
 
-\`\`\`bash
+```bash
 npx serve .
-\`\`\`
+```
 
-A local HTTP server is preferable to double-clicking \`index.html\` because the page imports OpenChemLib as an ES module.
+A local HTTP server is preferable to double-clicking `index.html` because the page imports OpenChemLib as an ES module.
 
 ## Initial examples
 
-- \`(CH3CH2CH2)2NH\` — dipropylamine
-- \`CH3CH2CH2CH2OCH2CH3\` — 1-ethoxybutane
-- \`CH3CH2OH\` — ethanol
-- \`CH3CH(CH3)CH3\` — 2-methylpropane
-- \`CH3(CH2)4CH3\` — hexane
-- \`(CH3)2CHOH\` — propan-2-ol
-- \`CH2=CHCH3\` — propene
+- `(CH3CH2CH2)2NH` — dipropylamine
+- `CH3CH2CH2CH2OCH2CH3` — 1-ethoxybutane
+- `CH3CH2OH` — ethanol
+- `CH3CH(CH3)CH3` — 2-methylpropane
+- `CH3(CH2)4CH3` — hexane
+- `(CH3)2CHOH` — propan-2-ol
+- `CH2=CHCH3` — propene
 
 ## Current parser scope
 
@@ -74,7 +74,7 @@ Supported today:
 Good next additions:
 
 - formal charge notation,
-- carbonyl-focused condensed shorthand such as \`CO2H\` / \`CHO\` with explicit disambiguation,
+- carbonyl-focused condensed shorthand such as `CO2H` / `CHO` with explicit disambiguation,
 - rings,
 - stereochemistry,
 - resonance-mode overlays,
