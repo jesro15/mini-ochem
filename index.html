@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Organic Structure Builder</title>
+  <meta name="description" content="Turn condensed organic formulas into a step-by-step molecular build and 2D structure." />
+  <style>
+    :root {
+      --bg: #f4f0e8;
+      --paper: #fffdf8;
+      --ink: #171714;
+      --muted: #6f6c64;
+      --line: #d8d1c4;
+      --soft: #ebe5d9;
+      --accent: #d24f37;
+      --good: #236b4c;
+      --warn: #9a6218;
+      --shadow: 0 16px 50px rgba(31, 27, 19, .08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 15% 5%, rgba(255,255,255,.95), transparent 34%),
+        linear-gradient(180deg, #f7f3eb 0%, var(--bg) 100%);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, input { font: inherit; }
+    .shell { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 38px 0 70px; }
+    .topline { display:flex; justify-content:space-between; align-items:center; gap:20px; margin-bottom:48px; }
+    .brand { font-size: 12px; letter-spacing: .18em; text-transform: uppercase; font-weight: 800; }
+    .status { font-size: 12px; color: var(--muted); display:flex; gap:8px; align-items:center; }
+    .dot { width:8px; height:8px; border-radius:50%; background:var(--good); display:inline-block; }
+    h1 {
+      margin:0;
+      font-family: Georgia, "Times New Roman", serif;
+      font-weight: 500;
+      letter-spacing: -.045em;
+      font-size: clamp(48px, 7vw, 92px);
+      line-height: .94;
+      max-width: 980px;
+    }
+    .lede { margin: 22px 0 34px; color:var(--muted); max-width:730px; font-size:17px; line-height:1.55; }
+    .input-card {
+      background: rgba(255,253,248,.9);
+      border:1px solid var(--line);
+      border-radius:24px;
+      padding:18px;
+      box-shadow: var(--shadow);
+      display:grid;
+      grid-template-columns: 1fr auto;
+      gap:12px;
+      position:sticky;
+      top:12px;
+      z-index:20;
+      backdrop-filter: blur(14px);
+    }
+    #formula {
+      min-width:0;
+      border:0;
+      outline:0;
+      background:transparent;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: clamp(18px, 2.5vw, 28px);
+      padding: 8px 10px;
+      color: var(--ink);
+    }
+    .build-btn {
+      border:0;
+      border-radius:16px;
+      background:var(--ink);
+      color:white;
+      padding: 14px 22px;
+      cursor:pointer;
+      font-weight:700;
+    }
+    .examples { display:flex; flex-wrap:wrap; gap:8px; margin:14px 2px 0; }
+    .chip {
+      border:1px solid var(--line); background:rgba(255,255,255,.45);
+      color:var(--muted); border-radius:999px; padding:8px 11px; cursor:pointer;
+      font-family:"SFMono-Regular", Consolas, monospace; font-size:12px;
+    }
+    .chip:hover { color:var(--ink); border-color:#aaa294; }
+    .grid { display:grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px,.75fr); gap:18px; margin-top:34px; }
+    .panel {
+      background:var(--paper); border:1px solid var(--line); border-radius:24px; box-shadow:var(--shadow); overflow:hidden;
+    }
+    .panel-head { padding:20px 22px 0; display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+    .eyebrow { font-size:11px; letter-spacing:.15em; text-transform:uppercase; color:var(--muted); font-weight:800; }
+    .formula-name { font-family:Georgia,serif; font-size:22px; margin:8px 0 0; }
+    .drawing { min-height:430px; display:grid; place-items:center; padding:24px; }
+    #mol-svg svg { width:min(100%, 640px); height:auto; max-height:380px; }
+    .fallback {
+      color:var(--muted); text-align:center; padding:44px 22px; line-height:1.5;
+    }
+    .details { padding:20px 22px 24px; border-top:1px solid var(--soft); }
+    .kv { display:grid; grid-template-columns:120px 1fr; gap:8px 14px; margin:7px 0; font-size:13px; }
+    .kv dt { color:var(--muted); } .kv dd { margin:0; font-family:"SFMono-Regular",Consolas,monospace; overflow-wrap:anywhere; }
+    .steps-panel { padding:22px; }
+    .steps-title { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:14px; }
+    .steps-title h2 { margin:0; font-family:Georgia,serif; font-size:25px; font-weight:500; }
+    .step {
+      border-top:1px solid var(--soft); padding:17px 0; opacity:.3; transform:translateY(5px);
+      transition:opacity .25s ease, transform .25s ease;
+    }
+    .step.visible { opacity:1; transform:none; }
+    .step-num { font-size:10px; color:var(--muted); font-weight:800; letter-spacing:.12em; }
+    .step h3 { margin:4px 0 6px; font-size:14px; }
+    .step p { margin:0; color:var(--muted); font-size:13px; line-height:1.5; }
+    .token-row { display:flex; flex-wrap:wrap; gap:6px; margin-top:9px; }
+    .token {
+      font-family:"SFMono-Regular",Consolas,monospace; font-size:12px;
+      border:1px solid var(--line); border-radius:8px; padding:5px 7px; background:#fff;
+    }
+    .valence-list { display:flex; flex-wrap:wrap; gap:7px; margin-top:10px; }
+    .valence {
+      border-radius:10px; padding:7px 9px; font-size:11px; border:1px solid var(--line); background:#fff;
+      font-family:"SFMono-Regular",Consolas,monospace;
+    }
+    .valence.good { border-color:#a7cdbb; color:var(--good); background:#f5fbf7; }
+    .valence.bad { border-color:#dfbf91; color:var(--warn); background:#fff9ef; }
+    .graph-wrap { margin-top:18px; border-top:1px solid var(--soft); padding-top:18px; }
+    #graph-svg { width:100%; min-height:220px; }
+    .legend { display:flex; flex-wrap:wrap; gap:14px; color:var(--muted); font-size:11px; margin-top:8px; }
+    .legend span::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--ink); display:inline-block; margin-right:6px; }
+    .error {
+      margin-top:18px; border:1px solid #e1b49e; background:#fff6f0; color:#7b3926;
+      padding:14px 16px; border-radius:14px; font-size:13px; line-height:1.45; display:none;
+    }
+    .note {
+      margin-top:20px; color:var(--muted); font-size:12px; line-height:1.55;
+    }
+    @media (max-width: 850px) {
+      .grid { grid-template-columns:1fr; }
+      .input-card { position:static; grid-template-columns:1fr; }
+      .build-btn { width:100%; }
+      .drawing { min-height:320px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="topline">
+      <div class="brand">Organic Structure Builder</div>
+      <div class="status"><span class="dot"></span> static HTML + JavaScript</div>
+    </div>
+
+    <h1>Build the molecule, not just the answer.</h1>
+    <p class="lede">
+      Enter a condensed organic formula. The page parses the notation, builds a molecular graph,
+      checks valence, identifies basic functional groups, converts the graph to SMILES, and then
+      asks OpenChemLib to generate the final chemistry-grade 2D depiction.
+    </p>
+
+    <div class="input-card">
+      <input id="formula" value="(CH3CH2CH2)2NH" autocomplete="off" spellcheck="false" aria-label="Condensed formula" />
+      <button class="build-btn" id="build">Build structure</button>
+    </div>
+    <div class="examples" id="examples"></div>
+    <div class="error" id="error"></div>
+
+    <section class="grid">
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <div class="eyebrow">Final depiction</div>
+            <div class="formula-name" id="name">—</div>
+          </div>
+          <div class="eyebrow" id="group">—</div>
+        </div>
+        <div class="drawing" id="mol-svg">
+          <div class="fallback">Enter a formula to render it.</div>
+        </div>
+        <dl class="details">
+          <div class="kv"><dt>Condensed</dt><dd id="condensed">—</dd></div>
+          <div class="kv"><dt>SMILES</dt><dd id="smiles">—</dd></div>
+          <div class="kv"><dt>Heavy atoms</dt><dd id="heavy">—</dd></div>
+          <div class="kv"><dt>Status</dt><dd id="validity">—</dd></div>
+        </dl>
+      </article>
+
+      <aside class="panel steps-panel">
+        <div class="steps-title">
+          <div>
+            <div class="eyebrow">Reasoning path</div>
+            <h2>How it is built</h2>
+          </div>
+        </div>
+        <div id="steps"></div>
+        <div class="graph-wrap">
+          <div class="eyebrow">Connectivity map</div>
+          <svg id="graph-svg" viewBox="0 0 430 260" role="img" aria-label="Heavy atom connectivity map"></svg>
+          <div class="legend"><span>labels include declared H count</span><span>dots show typical lone pairs</span></div>
+        </div>
+      </aside>
+    </section>
+
+    <p class="note">
+      Current scope: common acyclic condensed formulas containing C, N, O, S, P, F, Cl, Br, and I;
+      common branch notation; repeated parenthetical groups; single, double, and triple bonds.
+      The parser intentionally flags ambiguous or valence-inconsistent input instead of silently inventing chemistry.
+    </p>
+  </main>
+
+  <script type="module">
+    import * as OCL from "https://esm.sh/openchemlib@9.25.0";
+
+    const ELEMENTS = {
+      C:  { valences:[4], lonePairs:0 },
+      N:  { valences:[3], lonePairs:1 },
+      O:  { valences:[2], lonePairs:2 },
+      S:  { valences:[2,4,6], lonePairs:2 },
+      P:  { valences:[3,5], lonePairs:1 },
+      F:  { valences:[1], lonePairs:3 },
+      Cl: { valences:[1], lonePairs:3 },
+      Br: { valences:[1], lonePairs:3 },
+      I:  { valences:[1], lonePairs:3 }
+    };
+
+    const KNOWN = {
+      "(CH3CH2CH2)2NH": { name:"Dipropylamine", note:"secondary amine" },
+      "CH3CH2CH2CH2OCH2CH3": { name:"1-ethoxybutane", note:"ether" },
+      "CH3CH2OH": { name:"Ethanol", note:"alcohol" },
+      "CH3CH(CH3)CH3": { name:"2-methylpropane", note:"branched alkane" },
+      "CH3(CH2)4CH3": { name:"Hexane", note:"alkane" },
+      "(CH3)2CHOH": { name:"Propan-2-ol", note:"alcohol" },
+      "CH2=CHCH3": { name:"Propene", note:"alkene" }
+    };
+
+    const EXAMPLES = Object.keys(KNOWN);
+
+    class Graph {
+      constructor(){ this.nodes=[]; this.bonds=[]; }
+      addNode(el, hCount=0){
+        const node = { id:this.nodes.length, el, hCount, charge:0 };
+        this.nodes.push(node); return node.id;
+      }
+      addBond(a,b,order=1){ this.bonds.push({a,b,order}); }
+      neighbors(id){
+        return this.bonds.filter(x=>x.a===id || x.b===id).map(x=>({
+          id:x.a===id ? x.b : x.a,
+          order:x.order
+        }));
+      }
+      bondOrderSum(id){ return this.neighbors(id).reduce((s,n)=>s+n.order,0); }
+      capacity(id){
+        const n=this.nodes[id], rule=ELEMENTS[n.el];
+        if(!rule) return 0;
+        const used=this.bondOrderSum(id)+n.hCount;
+        return Math.max(...rule.valences)-used;
+      }
+    }
+
+    function cleanFormula(s){
+      return s.replace(/\s+/g,"").replace(/[–—−]/g,"-").replace(/-/g,"");
+    }
+
+    function readAtom(str, pos){
+      const m = str.slice(pos).match(/^(Cl|Br|[CNOSPFI])/);
+      if(!m) throw new Error("Expected an atom at “" + str.slice(pos) + "”.");
+      const el=m[1]; let i=pos+el.length; let hCount=0;
+      if(str[i]==="H"){
+        i++;
+        const n=str.slice(i).match(/^\d+/);
+        hCount=n ? Number(n[0]) : 1;
+        if(n) i += n[0].length;
+      }
+      return {el,hCount,next:i,raw:str.slice(pos,i)};
+    }
+
+    function findMatchingParen(str,start){
+      let depth=0;
+      for(let i=start;i<str.length;i++){
+        if(str[i]==="(") depth++;
+        if(str[i]===")") depth--;
+        if(depth===0) return i;
+      }
+      throw new Error("Unclosed parenthesis.");
+    }
+
+    function readMultiplier(str,pos){
+      const m=str.slice(pos).match(/^\d+/);
+      return m ? {value:Number(m[0]), next:pos+m[0].length} : {value:1,next:pos};
+    }
+
+    function parseLinear(str, graph, anchor=null){
+      let i=0, current=anchor, first=null, pendingBond=1;
+      while(i<str.length){
+        const ch=str[i];
+        if(ch==="="){ pendingBond=2; i++; continue; }
+        if(ch==="#"){ pendingBond=3; i++; continue; }
+
+        if(ch==="("){
+          if(current===null) throw new Error("A parenthesized group needs an attachment point here.");
+          const close=findMatchingParen(str,i);
+          const inner=str.slice(i+1,close);
+          const mult=readMultiplier(str,close+1);
+          const charsAfter = str.slice(mult.next);
+          const cap = graph.capacity(current);
+
+          const serial = mult.value>1 && cap < mult.value || (mult.value===1 && cap<=1 && charsAfter.length>0);
+
+          if(serial){
+            for(let k=0;k<mult.value;k++){
+              const piece=parseLinear(inner,graph,current);
+              current=piece.last;
+            }
+          } else {
+            for(let k=0;k<mult.value;k++) parseLinear(inner,graph,current);
+          }
+          i=mult.next;
+          continue;
+        }
+
+        const atom=readAtom(str,i);
+        const id=graph.addNode(atom.el,atom.hCount);
+        if(first===null) first=id;
+        if(current!==null) graph.addBond(current,id,pendingBond);
+        current=id; pendingBond=1; i=atom.next;
+      }
+      return {first,last:current};
+    }
+
+    function parseFormula(input){
+      const str=cleanFormula(input);
+      if(!str) throw new Error("Enter a condensed formula.");
+
+      const g=new Graph();
+
+      if(str[0]==="("){
+        const close=findMatchingParen(str,0);
+        const mult=readMultiplier(str,close+1);
+        const remainder=str.slice(mult.next);
+        if(mult.value>1 && remainder){
+          const core=parseLinear(remainder,g,null);
+          const hub=core.first;
+          const groupText=str.slice(1,close);
+          for(let k=0;k<mult.value;k++){
+            const piece=parseLinear(groupText,g,null);
+            const candidates=[piece.last,piece.first].filter((v,idx,a)=>v!==null && a.indexOf(v)===idx);
+            const endpoint=candidates.find(id=>g.capacity(id)>0);
+            if(endpoint===undefined) throw new Error("Repeated group has no free valence for attachment.");
+            g.addBond(hub,endpoint,1);
+          }
+        } else {
+          parseLinear(str,g,null);
+        }
+      } else {
+        parseLinear(str,g,null);
+      }
+
+      if(g.nodes.length===0) throw new Error("No heavy atoms were parsed.");
+      return {graph:g, condensed:str};
+    }
+
+    function validateGraph(g){
+      return g.nodes.map(n=>{
+        const used=g.bondOrderSum(n.id)+n.hCount;
+        const allowed=ELEMENTS[n.el]?.valences || [];
+        const ok=allowed.includes(used);
+        return {id:n.id, el:n.el, h:n.hCount, used, allowed, ok};
+      });
+    }
+
+    function detectGroup(g){
+      for(const n of g.nodes){
+        if(n.el==="O"){
+          const ns=g.neighbors(n.id).map(x=>g.nodes[x.id]);
+          const c=ns.filter(x=>x.el==="C").length;
+          if(c===2 && n.hCount===0) return "Ether";
+          if(c===1 && n.hCount===1) return "Alcohol";
+        }
+      }
+      for(const n of g.nodes){
+        if(n.el==="N"){
+          const c=g.neighbors(n.id).map(x=>g.nodes[x.id]).filter(x=>x.el==="C").length;
+          if(c===1 && n.hCount===2) return "Primary amine";
+          if(c===2 && n.hCount===1) return "Secondary amine";
+          if(c===3 && n.hCount===0) return "Tertiary amine";
+        }
+      }
+      if(g.bonds.some(b=>b.order===3)) return "Alkyne";
+      if(g.bonds.some(b=>b.order===2)) return "Alkene";
+      if(g.nodes.every(n=>n.el==="C")) return "Hydrocarbon";
+      return "Organic molecule";
+    }
+
+    function atomSMILES(n){
+      if(n.charge){
+        const h=n.hCount ? "H"+(n.hCount>1?n.hCount:"") : "";
+        return "["+n.el+h+(n.charge>0?"+":"-")+"]";
+      }
+      return n.el;
+    }
+
+    function bondSymbol(order){ return order===2 ? "=" : order===3 ? "#" : ""; }
+
+    function graphToSmiles(g){
+      const terminals=g.nodes.filter(n=>g.neighbors(n.id).length<=1);
+      const start=(terminals[0] || g.nodes[0]).id;
+      const seen=new Set();
+
+      function walk(id,parent){
+        seen.add(id);
+        const n=g.nodes[id];
+        const next=g.neighbors(id).filter(x=>x.id!==parent && !seen.has(x.id));
+        if(next.length===0) return atomSMILES(n);
+
+        let out=atomSMILES(n);
+        const main=next[0];
+        for(let i=1;i<next.length;i++){
+          const b=next[i];
+          out += "(" + bondSymbol(b.order) + walk(b.id,id) + ")";
+        }
+        out += bondSymbol(main.order) + walk(main.id,id);
+        return out;
+      }
+      return walk(start,null);
+    }
+
+    function explicitTokens(str){
+      const out=[]; let i=0;
+      while(i<str.length){
+        if("()=#".includes(str[i])) { out.push(str[i]); i++; continue; }
+        if(/\d/.test(str[i])) { const m=str.slice(i).match(/^\d+/)[0]; out.push(m); i+=m.length; continue; }
+        try {
+          const a=readAtom(str,i); out.push(a.raw); i=a.next;
+        } catch {
+          out.push(str[i]); i++;
+        }
+      }
+      return out;
+    }
+
+    function functionalSentence(group){
+      const map={
+        "Ether":"An oxygen is bonded to two carbon groups: R–O–R′.",
+        "Alcohol":"An oxygen bears H and is bonded to carbon: R–OH.",
+        "Primary amine":"Nitrogen is bonded to one carbon group and bears two H atoms.",
+        "Secondary amine":"Nitrogen is bonded to two carbon groups and bears one H atom.",
+        "Tertiary amine":"Nitrogen is bonded to three carbon groups and bears no H.",
+        "Alkene":"The molecular graph contains a C=C double bond.",
+        "Alkyne":"The molecular graph contains a C≡C triple bond.",
+        "Hydrocarbon":"Only carbon and hydrogen are present in the parsed structure."
+      };
+      return map[group] || "The graph is classified from its atom connectivity.";
+    }
+
+    function stepData(parsed, validations, smiles, group){
+      const tokens=explicitTokens(parsed.condensed);
+      const atomWords=parsed.graph.nodes.map(n=>n.el+(n.hCount ? "H"+(n.hCount>1?n.hCount:"") : ""));
+      const bad=validations.filter(v=>!v.ok);
+      return [
+        {
+          title:"Read the condensed notation",
+          text:"Treat element symbols and their attached H counts as units. Parentheses define a repeated or branched group.",
+          extra:'<div class="token-row">'+tokens.map(t=>'<span class="token">'+t+'</span>').join("")+'</div>'
+        },
+        {
+          title:"Create the heavy-atom graph",
+          text:"Parsed heavy-atom units: "+atomWords.join(" · ")+". Bonds are created from adjacency, branches, and repeated groups.",
+          extra:""
+        },
+        {
+          title:"Check each atom’s valence",
+          text: bad.length ? "At least one declared H count or bond pattern is inconsistent with the usual valence rules." : "Every atom matches a common neutral valence for this introductory model.",
+          extra:'<div class="valence-list">'+validations.map(v=>'<span class="valence '+(v.ok?"good":"bad")+'">'+v.el+(v.h?"H"+(v.h>1?v.h:""):"")+" · "+v.used+"/"+v.allowed.join("|")+"</span>").join("")+'</div>'
+        },
+        {
+          title:"Recognize the functional group",
+          text: group+". "+functionalSentence(group),
+          extra:""
+        },
+        {
+          title:"Encode connectivity for the renderer",
+          text:"The graph becomes SMILES “"+smiles+"”. OpenChemLib then computes a conventional 2D layout instead of us guessing bond angles.",
+          extra:""
+        }
+      ];
+    }
+
+    function layoutGraph(g){
+      const W=430,H=260,pad=42;
+      const n=g.nodes.length;
+      if(n===1) return [{x:W/2,y:H/2}];
+
+      const start=(g.nodes.find(n=>g.neighbors(n.id).length===1) || g.nodes[0]).id;
+      const levels=new Map([[start,0]]);
+      const parent=new Map([[start,null]]);
+      const q=[start];
+      while(q.length){
+        const id=q.shift();
+        for(const nb of g.neighbors(id)){
+          if(!levels.has(nb.id)){
+            levels.set(nb.id,levels.get(id)+1);
+            parent.set(nb.id,id); q.push(nb.id);
+          }
+        }
+      }
+      const maxL=Math.max(...levels.values(),1);
+      const groups={};
+      for(const [id,l] of levels) (groups[l] ||= []).push(id);
+      const pos=Array(n);
+      for(const [levelStr,ids] of Object.entries(groups)){
+        const l=Number(levelStr);
+        ids.forEach((id,j)=>{
+          const x=pad+(W-2*pad)*(l/maxL);
+          const y=ids.length===1 ? H/2 : pad+(H-2*pad)*(j/(ids.length-1));
+          pos[id]={x,y};
+        });
+      }
+      return pos;
+    }
+
+    function renderGraph(g){
+      const svg=document.getElementById("graph-svg");
+      const pos=layoutGraph(g);
+      const parts=[];
+      for(const b of g.bonds){
+        const a=pos[b.a], c=pos[b.b];
+        const dx=c.x-a.x, dy=c.y-a.y;
+        const len=Math.hypot(dx,dy)||1, ox=-dy/len*4, oy=dx/len*4;
+        const lines=b.order;
+        for(let k=0;k<lines;k++){
+          const shift=(k-(lines-1)/2);
+          parts.push('<line x1="'+(a.x+ox*shift)+'" y1="'+(a.y+oy*shift)+'" x2="'+(c.x+ox*shift)+'" y2="'+(c.y+oy*shift)+'" stroke="#6f6c64" stroke-width="2"/>');
+        }
+      }
+      for(const n of g.nodes){
+        const p=pos[n.id];
+        parts.push('<circle cx="'+p.x+'" cy="'+p.y+'" r="23" fill="#fffdf8" stroke="#171714" stroke-width="1.5"/>');
+        parts.push('<text x="'+p.x+'" y="'+(p.y+4)+'" text-anchor="middle" font-size="13" font-family="ui-monospace,monospace" fill="#171714">'+n.el+(n.hCount?"H"+(n.hCount>1?n.hCount:""):"")+'</text>');
+        const lp=ELEMENTS[n.el]?.lonePairs||0;
+        if(lp>0 && ["N","O","F","Cl","Br","I"].includes(n.el)){
+          for(let j=0;j<lp;j++){
+            const angle=(-Math.PI/2)+(j-(lp-1)/2)*0.55;
+            const cx=p.x+Math.cos(angle)*31, cy=p.y+Math.sin(angle)*31;
+            parts.push('<circle cx="'+(cx-2.5)+'" cy="'+cy+'" r="1.6" fill="#d24f37"/><circle cx="'+(cx+2.5)+'" cy="'+cy+'" r="1.6" fill="#d24f37"/>');
+          }
+        }
+      }
+      svg.innerHTML=parts.join("");
+    }
+
+    function revealSteps(){
+      document.querySelectorAll(".step").forEach((el,i)=>{
+        setTimeout(()=>el.classList.add("visible"),90*i);
+      });
+    }
+
+    function render(){
+      const error=document.getElementById("error");
+      error.style.display="none"; error.textContent="";
+      try {
+        const raw=document.getElementById("formula").value;
+        const parsed=parseFormula(raw);
+        const checks=validateGraph(parsed.graph);
+        const bad=checks.filter(x=>!x.ok);
+        if(bad.length){
+          const problem=bad.map(x=>x.el+" atom #"+(x.id+1)+" uses "+x.used+" valence units; expected "+x.allowed.join(" or ")).join("; ");
+          throw new Error("Valence check failed: "+problem+".");
+        }
+
+        const smiles=graphToSmiles(parsed.graph);
+        const group=detectGroup(parsed.graph);
+        const known=KNOWN[parsed.condensed];
+
+        document.getElementById("name").textContent=known?.name || "Parsed structure";
+        document.getElementById("group").textContent=known?.note || group;
+        document.getElementById("condensed").textContent=parsed.condensed;
+        document.getElementById("smiles").textContent=smiles;
+        document.getElementById("heavy").textContent=String(parsed.graph.nodes.length);
+        document.getElementById("validity").textContent="valence checks passed";
+
+        const steps=stepData(parsed,checks,smiles,group);
+        document.getElementById("steps").innerHTML=steps.map((s,i)=>
+          '<section class="step"><div class="step-num">0'+(i+1)+'</div><h3>'+s.title+'</h3><p>'+s.text+'</p>'+s.extra+'</section>'
+        ).join("");
+
+        renderGraph(parsed.graph);
+
+        const mol=OCL.Molecule.fromSmiles(smiles);
+        if(typeof mol.inventCoordinates==="function") mol.inventCoordinates();
+        const svg=mol.toSVG(700,420,"molecule",{autoCrop:true,autoCropMargin:16,factorTextSize:1.1});
+        document.getElementById("mol-svg").innerHTML=svg;
+        revealSteps();
+      } catch(e) {
+        error.textContent=e.message || String(e);
+        error.style.display="block";
+      }
+    }
+
+    const examples=document.getElementById("examples");
+    examples.innerHTML=EXAMPLES.map(x=>'<button class="chip" data-formula="'+x+'">'+x+'</button>').join("");
+    examples.addEventListener("click",e=>{
+      const btn=e.target.closest("[data-formula]"); if(!btn) return;
+      document.getElementById("formula").value=btn.dataset.formula; render();
+    });
+    document.getElementById("build").addEventListener("click",render);
+    document.getElementById("formula").addEventListener("keydown",e=>{ if(e.key==="Enter") render(); });
+    render();
+  </script>
+</body>
+</html>
