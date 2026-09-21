@@ -263,7 +263,7 @@ function moleculeGroup(graph, geometry) {
         start.clone().add(offset),
         end.clone().add(offset),
         order === 1 ? 0.065 : 0.047,
-        bondMaterial
+        bondMaterial.clone()
       );
       bondMesh.userData = {
         kind: "bond",
@@ -359,10 +359,14 @@ export class Molecule3DView {
     this.expanded = null;
     this.geometrySource = null;
     this.hoverHandler = null;
+    this.selectHandler = null;
+    this.pointerDown = null;
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
     this.clock = new THREE.Clock();
     this.raf = null;
+
+    this.renderer.domElement.style.touchAction = "none";
 
     this.renderer.domElement.addEventListener(
       "pointermove",
@@ -371,6 +375,14 @@ export class Molecule3DView {
     this.renderer.domElement.addEventListener(
       "pointerleave",
       this.handlePointerLeave.bind(this)
+    );
+    this.renderer.domElement.addEventListener(
+      "pointerdown",
+      this.handlePointerDown.bind(this)
+    );
+    this.renderer.domElement.addEventListener(
+      "pointerup",
+      this.handlePointerUp.bind(this)
     );
 
     this.animate();
@@ -382,8 +394,8 @@ export class Molecule3DView {
     this.renderer.render(this.scene, this.camera);
   }
 
-  handlePointerMove(event) {
-    if (!this.hoverHandler || !this.molecule) return;
+  pick(event) {
+    if (!this.molecule) return null;
 
     const rect = this.renderer.domElement.getBoundingClientRect();
     this.pointer.x =
@@ -402,23 +414,100 @@ export class Molecule3DView {
       return item.object && item.object.userData && item.object.userData.kind;
     });
 
-    this.hoverHandler(
-      hit ? hit.object.userData : null,
-      {
+    return {
+      hit: hit ? hit.object.userData : null,
+      point: {
         clientX: event.clientX,
         clientY: event.clientY,
         localX: event.clientX - rect.left,
         localY: event.clientY - rect.top
       }
-    );
+    };
   }
 
-  handlePointerLeave() {
+  handlePointerMove(event) {
+    if (!this.hoverHandler || event.pointerType === "touch") return;
+
+    const picked = this.pick(event);
+    if (!picked) return;
+    this.hoverHandler(picked.hit, picked.point);
+  }
+
+  handlePointerLeave(event) {
+    if (event.pointerType === "touch") return;
     if (this.hoverHandler) this.hoverHandler(null, null);
+  }
+
+  handlePointerDown(event) {
+    this.pointerDown = {
+      x: event.clientX,
+      y: event.clientY,
+      pointerId: event.pointerId
+    };
+  }
+
+  handlePointerUp(event) {
+    if (!this.selectHandler || !this.pointerDown) return;
+
+    const dx = event.clientX - this.pointerDown.x;
+    const dy = event.clientY - this.pointerDown.y;
+    const moved = Math.hypot(dx, dy);
+    this.pointerDown = null;
+
+    // Do not turn an orbit/pan gesture into a selection.
+    if (moved > 10) return;
+
+    const picked = this.pick(event);
+    if (!picked) return;
+    this.selectHandler(picked.hit, picked.point);
   }
 
   setHoverHandler(handler) {
     this.hoverHandler = typeof handler === "function" ? handler : null;
+  }
+
+  setSelectHandler(handler) {
+    this.selectHandler = typeof handler === "function" ? handler : null;
+  }
+
+  setSelection(selection) {
+    if (!this.molecule) return;
+
+    this.molecule.traverse(function (object) {
+      if (!object.userData || !object.userData.kind || !object.material) return;
+
+      if (object.material.emissive) {
+        object.material.emissive.setHex(0x000000);
+        object.material.emissiveIntensity = 0;
+      }
+      object.scale.setScalar(1);
+
+      const atomSelected =
+        selection &&
+        selection.kind === "atom" &&
+        object.userData.kind === "atom" &&
+        !object.userData.isHydrogen &&
+        object.userData.sourceId === selection.id;
+
+      const bondSelected =
+        selection &&
+        selection.kind === "bond" &&
+        object.userData.kind === "bond" &&
+        object.userData.sourceBondId === selection.id;
+
+      if (atomSelected) {
+        object.scale.setScalar(1.22);
+        if (object.material.emissive) {
+          object.material.emissive.setHex(0xffffff);
+          object.material.emissiveIntensity = 0.32;
+        }
+      }
+
+      if (bondSelected && object.material.emissive) {
+        object.material.emissive.setHex(0xffffff);
+        object.material.emissiveIntensity = 0.42;
+      }
+    });
   }
 
   setGraph(graph, geometry) {
@@ -432,6 +521,7 @@ export class Molecule3DView {
     this.geometrySource = built.source;
     this.ghost = ghostOf(built.group);
     this.ghost.visible = false;
+    this.setSelection(null);
 
     this.scene.add(this.molecule);
     this.scene.add(this.ghost);
