@@ -1,36 +1,53 @@
-# Organic Structure Builder
+# MiniOChem
 
-A deliberately small browser-only teaching tool for turning condensed organic formulas into visual molecular structures.
+A small browser-native organic chemistry teaching app that keeps one molecular graph and renders it in multiple representations.
 
-## Why this exists
+## Current views
 
-The goal is not merely to show the final skeletal formula. The app exposes the intermediate representation:
+- **Build / Lewis** — parse condensed notation, check valence, infer introductory hybridization, show lone pairs/connectivity, and render a conventional 2D structure.
+- **3D geometry** — expand implicit hydrogens and build an idealized local VSEPR/hybridization model that can be rotated freely.
+- **Newman projection** — choose an eligible sp3 C-C single bond and rotate the back carbon through a full 360 degree dihedral.
+- **Symmetry explorer** — overlay x/y/z axes, rotate the molecule against a fixed ghost reference, and display xy/xz/yz mirror planes.
 
-1. tokenize the condensed formula,
-2. expand branches and repeated parenthetical groups,
-3. build a heavy-atom molecular graph,
-4. check common neutral valences,
-5. identify a basic functional group,
-6. convert the graph to SMILES,
-7. render a conventional 2D structure with OpenChemLib.
+The 3D model is intentionally labeled as **idealized educational geometry**, not an energy-minimized conformer.
 
-The interface is intended for early organic chemistry work where the useful question is often “how do I systematically build this?” rather than “what is the final picture?”
+## Architecture
 
-## Stack
+```text
+condensed formula
+      |
+      v
+chem-core.js
+  parser -> molecular graph -> valence / hybridization / functional group
+      |
+      +--> OpenChemLib -> conventional 2D SVG
+      |
+      +--> render-3d.js -> idealized 3D atoms + bonds -> Three.js
+      |
+      +--> render-newman.js -> bond-axis projection
+      |
+      +--> MiniOChem Web Component
+```
 
-- one `index.html`
-- vanilla JavaScript
-- inline CSS
-- SVG for the teaching/connectivity diagram
-- OpenChemLib loaded as an ESM module from a CDN for the final 2D depiction
-- no React, no framework, no backend, no build step
+Files:
 
-## Run locally
+- `chem-core.js` — reusable chemistry graph/parser logic; no browser rendering dependency.
+- `render-3d.js` — idealized 3D geometry and Three.js scene.
+- `render-newman.js` — Newman projection SVG renderer.
+- `miniochem.js` — reusable `<mini-ochem>` Web Component.
+- `miniochem.css` — component presentation.
+- `index.html` — demo shell only.
+- `tests/core.test.mjs` — zero-dependency parser/core smoke tests.
 
-From the repo directory:
+The separation is deliberate: **chemistry truth lives in the graph; visual storytelling lives in renderers.**
+
+## Run in Codex or locally
+
+Clone/open the repo and run:
 
 ```bash
-python3 -m http.server 8000
+npm test
+npm run serve
 ```
 
 Then open:
@@ -39,29 +56,76 @@ Then open:
 http://localhost:8000
 ```
 
-You can also use:
+No npm install is required for the app itself. OpenChemLib and Three.js are loaded as pinned browser ESM modules.
 
-```bash
-npx serve .
+## Deep links
+
+The demo supports a formula and view in the URL:
+
+```text
+http://localhost:8000/?formula=CH3CH2CH2CH3&view=newman
 ```
 
-A local HTTP server is preferable to double-clicking `index.html` because the page imports OpenChemLib as an ES module.
+Supported view values:
 
-## Initial examples
+```text
+build
+3d
+newman
+symmetry
+```
 
-- `(CH3CH2CH2)2NH` — dipropylamine
-- `CH3CH2CH2CH2OCH2CH3` — 1-ethoxybutane
-- `CH3CH2OH` — ethanol
-- `CH3CH(CH3)CH3` — 2-methylpropane
-- `CH3(CH2)4CH3` — hexane
-- `(CH3)2CHOH` — propan-2-ol
-- `CH2=CHCH3` — propene
+## Embed it in the future OChem project
 
-## Current parser scope
+Copy/import these files:
 
-The parser is intentionally constrained instead of pretending to understand arbitrary chemical notation.
+```text
+chem-core.js
+render-3d.js
+render-newman.js
+miniochem.js
+miniochem.css
+```
 
-Supported today:
+Then:
+
+```html
+<script type="module" src="./miniochem.js"></script>
+
+<mini-ochem
+  formula="CH3CH2CH2CH3"
+  view="newman">
+</mini-ochem>
+```
+
+From JavaScript:
+
+```js
+const viewer = document.querySelector("mini-ochem");
+
+viewer.setFormula("CH3CH2CH2CH2OCH2CH3");
+viewer.setView("3d");
+```
+
+It emits:
+
+- `moleculechange` with condensed formula, generated SMILES, molecular formula, and broad functional-group classification.
+- `viewchange` with the active representation.
+
+This gives a future OChem/Codex project a stable interface rather than depending on the demo page.
+
+## Examples already covered by tests
+
+- `(CH3CH2CH2)2NH`
+- `CH3CH2CH2CH2OCH2CH3`
+- `CH3(CH2)4CH3`
+- `CH3CH(CH3)CH3`
+- `CH2=CHCH3`
+- `CH3CH2CH2CH3`
+
+## Parser scope today
+
+Supported:
 
 - common acyclic condensed formulas,
 - C, N, O, S, P, F, Cl, Br, I,
@@ -71,20 +135,31 @@ Supported today:
 - single, double, and triple bonds,
 - common neutral valence checks.
 
-Good next additions:
+Not yet a general chemical language:
 
-- formal charge notation,
-- carbonyl-focused condensed shorthand such as `CO2H` / `CHO` with explicit disambiguation,
 - rings,
-- stereochemistry,
-- resonance-mode overlays,
-- electron-pushing arrows,
-- curated exercise data with expected graph + explanation,
-- a second Lewis-structure mode with all hydrogens and lone pairs explicitly placed,
-- test fixtures for hundreds of textbook condensed formulas.
+- stereochemical `R/S` or `E/Z`,
+- charged condensed-formula grammar,
+- resonance families,
+- reaction/mechanism arrows,
+- force-field conformer minimization,
+- automatic point-group assignment.
 
-## Design principle
+## Next useful OChem layers
 
-Keep chemistry truth and visual storytelling separate.
+The component boundary is designed so later additions can use the same graph:
 
-The parser owns the graph. OpenChemLib owns chemistry-grade 2D depiction. The custom SVG layer owns the explanatory animation. That makes it possible to make the interface more playful without allowing animation code to invent chemistry.
+1. **Conformation coupling** — rotating a Newman dihedral should rotate the corresponding fragment in the 3D scene.
+2. **Wedge/dash and chirality** — assign stereocenters and compare 2D wedge/dash drawings with 3D configurations.
+3. **Cyclohexane** — chair/boat conformers, axial/equatorial positions, ring flips.
+4. **Symmetry operations** — explicit Cn rotation, sigma reflection, inversion, and optional point-group classification using chemically valid coordinates.
+5. **Resonance / electron pushing** — animate lone pairs and pi electrons while preserving graph/electron bookkeeping.
+6. **Orbital mode** — p-orbital alignment for conjugation, sp/sp2/sp3 geometry, and sigma/pi bond decomposition.
+
+## Rendering choices
+
+- **OpenChemLib** is used for chemistry-aware 2D molecular depiction.
+- **Three.js** is used for interactive spatial reasoning and orbit controls.
+- Custom SVG is used for Newman projections and Lewis/connectivity teaching graphics.
+
+This keeps the app small while leaving room for deeper OChem visualization later.
