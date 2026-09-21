@@ -52,7 +52,7 @@ const TEMPLATE = [
         '</div>',
         '<div class="primary-panel" data-primary="3d">',
           '<div class="stage" id="stage3d">',
-            '<div class="stage-help">drag to orbit · scroll to zoom · hover atoms or bonds</div>',
+            '<div class="stage-help">drag to orbit · pinch/scroll to zoom · tap atoms or bonds</div>',
           '</div>',
         '</div>',
         '<div class="hover-card" hidden></div>',
@@ -411,7 +411,7 @@ function renderSkeletalSvg(svg, molecule, result) {
     const p = positions[node.id];
     parts.push(
       '<circle class="atom-hit" data-atom-id="' + node.id +
-      '" cx="' + p.x + '" cy="' + p.y + '" r="24"/>'
+      '" cx="' + p.x + '" cy="' + p.y + '" r="38"/>'
     );
   });
 
@@ -534,6 +534,7 @@ class MiniOChem extends HTMLElement {
         angles: false
       },
       secondary: null,
+      selection: null,
       newmanBondIndex: 0,
       dihedral: 60
     };
@@ -542,6 +543,9 @@ class MiniOChem extends HTMLElement {
     this.symmetryView = null;
     this.resizeObserver = null;
     this.pendingCandidates = null;
+    this.coarsePointer = window.matchMedia(
+      "(hover: none), (pointer: coarse)"
+    ).matches;
   }
 
   connectedCallback() {
@@ -604,14 +608,20 @@ class MiniOChem extends HTMLElement {
       });
     });
 
-    this.$$("[data-overlay]").forEach(function (input) {
+    this.$("[data-overlay]").forEach(function (input) {
       input.addEventListener("change", function () {
         self.state.overlays[input.dataset.overlay] = input.checked;
-        self.hideHover();
+        if (self.state.selection) {
+          self.renderSelectionCard();
+        } else {
+          self.hideHover(true);
+        }
       });
     });
 
     this.$("#skeletalSvg").addEventListener("pointermove", function (event) {
+      if (self.coarsePointer || self.state.selection) return;
+
       const target = event.target.closest("[data-atom-id],[data-bond-id]");
       if (!target) {
         self.hideHover();
@@ -633,6 +643,26 @@ class MiniOChem extends HTMLElement {
 
     this.$("#skeletalSvg").addEventListener("pointerleave", function () {
       self.hideHover();
+    });
+
+    this.$("#skeletalSvg").addEventListener("click", function (event) {
+      const target = event.target.closest("[data-atom-id],[data-bond-id]");
+      if (!target) {
+        self.clearSelection();
+        return;
+      }
+
+      if (target.hasAttribute("data-atom-id")) {
+        self.selectTarget("atom", Number(target.dataset.atomId));
+      } else {
+        self.selectTarget("bond", Number(target.dataset.bondId));
+      }
+    });
+
+    this.$(".hover-card").addEventListener("click", function (event) {
+      if (event.target.closest("[data-close-inspector]")) {
+        self.clearSelection();
+      }
     });
 
     this.$$(".secondary-nav button").forEach(function (button) {
@@ -756,6 +786,7 @@ class MiniOChem extends HTMLElement {
   applyResolved(result) {
     this.state.resolved = result;
     this.state.newmanBondIndex = 0;
+    this.state.selection = null;
 
     this.$(".workspace").hidden = false;
     this.$(".status").hidden = false;
@@ -829,6 +860,8 @@ class MiniOChem extends HTMLElement {
       const self = this;
 
       this.threeView.setHoverHandler(function (hit, point) {
+        if (self.state.selection || self.coarsePointer) return;
+
         if (!hit || !point) {
           self.hideHover();
           return;
@@ -849,6 +882,19 @@ class MiniOChem extends HTMLElement {
           self.showBondHover(hit.sourceBondId, localPoint);
         } else {
           self.hideHover();
+        }
+      });
+
+      this.threeView.setSelectHandler(function (hit) {
+        if (!hit) {
+          self.clearSelection();
+          return;
+        }
+
+        if (hit.kind === "atom" && !hit.isHydrogen) {
+          self.selectTarget("atom", hit.sourceId);
+        } else if (hit.kind === "bond" && Number.isInteger(hit.sourceBondId)) {
+          self.selectTarget("bond", hit.sourceBondId);
         }
       });
     }
@@ -895,12 +941,16 @@ class MiniOChem extends HTMLElement {
       const stage = this.$("#stage3d");
       this.threeView.mount(stage);
       this.threeView.setNormalMode();
+      this.threeView.setSelection(this.state.selection);
 
       const self = this;
       requestAnimationFrame(function () {
         self.threeView.resize(stage.clientWidth, stage.clientHeight || 620);
       });
     }
+
+    this.updateSelectionVisuals();
+    if (this.state.selection) this.renderSelectionCard();
 
     if (this.getAttribute("view") !== normalized) {
       this.setAttribute("view", normalized);
@@ -913,7 +963,7 @@ class MiniOChem extends HTMLElement {
     }));
   }
 
-  showAtomHover(atomId, point) {
+  showAtomHover(atomId, point, persistent) {
     if (!this.state.resolved) return;
 
     const graph = this.state.resolved.graph;
@@ -954,10 +1004,10 @@ class MiniOChem extends HTMLElement {
       sections.push('<small>enable an atom overlay above</small>');
     }
 
-    this.showHover(sections.join(""), point);
+    this.showHover(sections.join(""), point, persistent);
   }
 
-  showBondHover(bondId, point) {
+  showBondHover(bondId, point, persistent) {
     if (!this.state.resolved) return;
 
     const graph = this.state.resolved.graph;
@@ -983,23 +1033,108 @@ class MiniOChem extends HTMLElement {
       sections.push('<small>enable bond lengths above</small>');
     }
 
-    this.showHover(sections.join(""), point);
+    this.showHover(sections.join(""), point, persistent);
   }
 
-  showHover(html, point) {
+  showHover(html, point, persistent) {
     const card = this.$(".hover-card");
-    card.innerHTML = html;
+    const pinned = Boolean(persistent || this.coarsePointer);
+
+    card.classList.toggle("pinned", pinned);
+    card.innerHTML =
+      (pinned
+        ? '<button type="button" class="inspect-close" data-close-inspector aria-label="Close inspection">×</button>'
+        : "") +
+      html;
     card.hidden = false;
 
-    const x = Math.max(12, Math.min(point.localX + 16, this.$(".primary-stage").clientWidth - 260));
-    const y = Math.max(12, point.localY + 16);
+    if (pinned) {
+      card.style.left = "";
+      card.style.top = "";
+      return;
+    }
+
+    const safePoint = point || {
+      localX: this.$(".primary-stage").clientWidth / 2,
+      localY: this.$(".primary-stage").clientHeight / 2
+    };
+
+    const x = Math.max(
+      12,
+      Math.min(
+        safePoint.localX + 16,
+        this.$(".primary-stage").clientWidth - 260
+      )
+    );
+    const y = Math.max(12, safePoint.localY + 16);
 
     card.style.left = x + "px";
     card.style.top = y + "px";
   }
 
-  hideHover() {
-    this.$(".hover-card").hidden = true;
+  hideHover(force) {
+    if (this.state.selection && !force) return;
+    const card = this.$(".hover-card");
+    card.hidden = true;
+    card.classList.remove("pinned");
+  }
+
+  selectTarget(kind, id) {
+    const current = this.state.selection;
+
+    if (current && current.kind === kind && current.id === id) {
+      this.clearSelection();
+      return;
+    }
+
+    this.state.selection = { kind: kind, id: id };
+    this.updateSelectionVisuals();
+    this.renderSelectionCard();
+  }
+
+  clearSelection() {
+    this.state.selection = null;
+    this.updateSelectionVisuals();
+    this.hideHover(true);
+  }
+
+  updateSelectionVisuals() {
+    const selection = this.state.selection;
+
+    this.$(".atom-hit").forEach(function (target) {
+      target.classList.toggle(
+        "selected",
+        Boolean(
+          selection &&
+          selection.kind === "atom" &&
+          Number(target.dataset.atomId) === selection.id
+        )
+      );
+    });
+
+    this.$(".bond-hit").forEach(function (target) {
+      target.classList.toggle(
+        "selected",
+        Boolean(
+          selection &&
+          selection.kind === "bond" &&
+          Number(target.dataset.bondId) === selection.id
+        )
+      );
+    });
+
+    if (this.threeView) this.threeView.setSelection(selection);
+  }
+
+  renderSelectionCard() {
+    const selection = this.state.selection;
+    if (!selection) return;
+
+    if (selection.kind === "atom") {
+      this.showAtomHover(selection.id, null, true);
+    } else {
+      this.showBondHover(selection.id, null, true);
+    }
   }
 
   toggleSecondary(name) {
