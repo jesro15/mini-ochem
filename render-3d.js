@@ -145,6 +145,67 @@ export function idealizedCoordinates(graph) {
   return { expanded, positions };
 }
 
+function coordinatesForGeometry(graph, geometry) {
+  const built = idealizedCoordinates(graph);
+
+  if (!geometry || !Array.isArray(geometry.atomPositions)) {
+    built.source = {
+      kind: "idealized",
+      label: "Idealized VSEPR / reference bond lengths"
+    };
+    return built;
+  }
+
+  graph.nodes.forEach(function (node) {
+    const point = geometry.atomPositions[node.id];
+    if (!point || point.length < 3) return;
+
+    built.positions.set(
+      node.id,
+      new THREE.Vector3(point[0], point[1], point[2])
+    );
+  });
+
+  graph.nodes.forEach(function (node) {
+    const attached =
+      geometry.hydrogenPositions &&
+      geometry.hydrogenPositions[node.id]
+        ? geometry.hydrogenPositions[node.id]
+        : [];
+
+    const expandedHydrogens = built.expanded.atoms.filter(function (atom) {
+      return atom.isHydrogen && atom.sourceId === node.id;
+    });
+
+    expandedHydrogens.forEach(function (atom, index) {
+      const point = attached[index];
+      if (!point || point.length < 3) return;
+
+      built.positions.set(
+        atom.id,
+        new THREE.Vector3(point[0], point[1], point[2])
+      );
+    });
+  });
+
+  const center = Array.from(built.positions.values())
+    .reduce(function (sum, point) {
+      return sum.add(point);
+    }, new THREE.Vector3())
+    .divideScalar(Math.max(1, built.positions.size));
+
+  built.positions.forEach(function (point) {
+    point.sub(center);
+  });
+
+  built.source = {
+    kind: geometry.kind || "computed",
+    label: geometry.source || "Molecule-specific 3D coordinates"
+  };
+
+  return built;
+}
+
 function cylinder(start, end, radius, material) {
   const midpoint = start.clone().add(end).multiplyScalar(0.5);
   const direction = end.clone().sub(start);
@@ -182,8 +243,8 @@ function labelSprite(text) {
   return sprite;
 }
 
-function moleculeGroup(graph) {
-  const built = idealizedCoordinates(graph);
+function moleculeGroup(graph, geometry) {
+  const built = coordinatesForGeometry(graph, geometry);
   const group = new THREE.Group();
   const bondMaterial = new THREE.MeshStandardMaterial({ color: 0x8c877d, roughness: 0.6 });
 
@@ -198,12 +259,19 @@ function moleculeGroup(graph) {
     for (let i = 0; i < order; i += 1) {
       const shift = (i - (order - 1) / 2) * 0.11;
       const offset = offsetAxis.clone().multiplyScalar(shift);
-      group.add(cylinder(
+      const bondMesh = cylinder(
         start.clone().add(offset),
         end.clone().add(offset),
         order === 1 ? 0.065 : 0.047,
         bondMaterial
-      ));
+      );
+      bondMesh.userData = {
+        kind: "bond",
+        sourceBondId: bond.sourceBondId,
+        a: bond.a,
+        b: bond.b
+      };
+      group.add(bondMesh);
     }
   });
 
@@ -216,16 +284,22 @@ function moleculeGroup(graph) {
     });
     const sphere = new THREE.Mesh(new THREE.SphereGeometry(radius, 30, 22), material);
     sphere.position.copy(p);
+    sphere.userData = {
+      kind: "atom",
+      sourceId: atom.sourceId,
+      expandedId: atom.id,
+      element: atom.el,
+      isHydrogen: atom.isHydrogen
+    };
     group.add(sphere);
-
-    if (!atom.isHydrogen) {
-      const sprite = labelSprite(atom.el + String(atom.sourceId + 1));
-      sprite.position.copy(p).add(new THREE.Vector3(0, radius + 0.42, 0));
-      group.add(sprite);
-    }
   });
 
-  return { group, positions: built.positions };
+  return {
+    group,
+    positions: built.positions,
+    expanded: built.expanded,
+    source: built.source
+  };
 }
 
 function ghostOf(source) {
@@ -281,8 +355,24 @@ export class Molecule3DView {
 
     this.molecule = null;
     this.ghost = null;
+    this.positions = null;
+    this.expanded = null;
+    this.geometrySource = null;
+    this.hoverHandler = null;
+    this.raycaster = new THREE.Raycaster();
+    this.pointer = new THREE.Vector2();
     this.clock = new THREE.Clock();
     this.raf = null;
+
+    this.renderer.domElement.addEventListener(
+      "pointermove",
+      this.handlePointerMove.bind(this)
+    );
+    this.renderer.domElement.addEventListener(
+      "pointerleave",
+      this.handlePointerLeave.bind(this)
+    );
+
     this.animate();
   }
 
@@ -292,12 +382,54 @@ export class Molecule3DView {
     this.renderer.render(this.scene, this.camera);
   }
 
-  setGraph(graph) {
+  handlePointerMove(event) {
+    if (!this.hoverHandler || !this.molecule) return;
+
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    this.pointer.x =
+      ((event.clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1;
+    this.pointer.y =
+      -((event.clientY - rect.top) / Math.max(1, rect.height)) * 2 + 1;
+
+    this.raycaster.setFromCamera(this.pointer, this.camera);
+
+    const hits = this.raycaster.intersectObjects(
+      this.molecule.children,
+      true
+    );
+
+    const hit = hits.find(function (item) {
+      return item.object && item.object.userData && item.object.userData.kind;
+    });
+
+    this.hoverHandler(
+      hit ? hit.object.userData : null,
+      {
+        clientX: event.clientX,
+        clientY: event.clientY,
+        localX: event.clientX - rect.left,
+        localY: event.clientY - rect.top
+      }
+    );
+  }
+
+  handlePointerLeave() {
+    if (this.hoverHandler) this.hoverHandler(null, null);
+  }
+
+  setHoverHandler(handler) {
+    this.hoverHandler = typeof handler === "function" ? handler : null;
+  }
+
+  setGraph(graph, geometry) {
     if (this.molecule) this.scene.remove(this.molecule);
     if (this.ghost) this.scene.remove(this.ghost);
 
-    const built = moleculeGroup(graph);
+    const built = moleculeGroup(graph, geometry);
     this.molecule = built.group;
+    this.positions = built.positions;
+    this.expanded = built.expanded;
+    this.geometrySource = built.source;
     this.ghost = ghostOf(built.group);
     this.ghost.visible = false;
 
@@ -351,6 +483,14 @@ export class Molecule3DView {
     this.plane.rotation.set(0, 0, 0);
     if (planeName === "xz") this.plane.rotation.x = Math.PI / 2;
     if (planeName === "yz") this.plane.rotation.y = Math.PI / 2;
+  }
+
+  getGeometrySource() {
+    return this.geometrySource;
+  }
+
+  getPositions() {
+    return this.positions;
   }
 
   dispose() {
