@@ -1,9 +1,9 @@
 {
-  "name": "miniochem",
+  "name": "mini-ochem",
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --check chem-core.js && node --check miniochem.js && node --check render-3d.js && node --check render-newman.js && node tests/core.test.mjs",
+    "test": "node --check chem-core.js && node --check molecule-resolver.js && node --check miniochem.js && node --check render-3d.js && node --check render-newman.js && node tests/core.test.mjs",
     "serve": "python3 -m http.server 8000"
   }
 }
