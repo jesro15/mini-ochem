@@ -8,6 +8,9 @@ export const ELEMENTS = {
   Cl: { valences: [1], lonePairs: 3, color: 0x58a85d },
   Br: { valences: [1], lonePairs: 3, color: 0x8f3e2f },
   I:  { valences: [1], lonePairs: 3, color: 0x6c4596 },
+  B:  { valences: [3], lonePairs: 0, color: 0xd98f70 },
+  Si: { valences: [4], lonePairs: 0, color: 0xb8a58a },
+  Se: { valences: [2, 4, 6], lonePairs: 2, color: 0xb8792f },
   H:  { valences: [1], lonePairs: 0, color: 0xe7e7e7 }
 };
 
@@ -30,7 +33,7 @@ export class Graph {
   }
 
   addNode(el, hCount = 0) {
-    const node = { id: this.nodes.length, el, hCount, charge: 0 };
+    const node = { id: this.nodes.length, el, hCount, charge: 0, aromatic: false };
     this.nodes.push(node);
     return node.id;
   }
@@ -233,6 +236,7 @@ export function atomHybridization(graph, id) {
   const node = graph.nodes[id];
   const orders = graph.neighbors(id).map((neighbor) => neighbor.order);
 
+  if (node.aromatic) return "sp2";
   if (orders.some((order) => order === 3)) return "sp";
   if (orders.some((order) => order === 2)) return "sp2";
 
