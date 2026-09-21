@@ -8,7 +8,10 @@ import {
 
 import {
   resolveMolecule,
-  resolveCandidate
+  resolveCandidate,
+  getSameFormulaCandidates,
+  getSimilarCompounds,
+  OCL
 } from "./molecule-resolver.js";
 
 import { Molecule3DView } from "./render-3d.js";
@@ -59,6 +62,15 @@ const TEMPLATE = [
       '</div>',
 
       '<div class="provenance"></div>',
+
+      '<section class="related">',
+        '<div class="related-nav">',
+          '<span>Related</span>',
+          '<button type="button" data-related="formula">Same formula</button>',
+          '<button type="button" data-related="similar">Similar structure</button>',
+        '</div>',
+        '<div class="related-results" hidden></div>',
+      '</section>',
 
       '<div class="secondary-nav">',
         '<span>Other views</span>',
@@ -141,6 +153,47 @@ function esc(value) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+
+function candidateSvg(smiles, id) {
+  try {
+    const molecule = OCL.Molecule.fromSmiles(smiles);
+    if (typeof molecule.inventCoordinates === "function") {
+      molecule.inventCoordinates();
+    }
+
+    return molecule.toSVG(
+      260,
+      170,
+      id || "candidate",
+      {
+        autoCrop: true,
+        autoCropMargin: 14,
+        factorTextSize: 0.9
+      }
+    );
+  } catch {
+    return '<div class="candidate-fallback">structure unavailable</div>';
+  }
+}
+
+function candidateCard(item, index, mode) {
+  const title = item.title || item.iupacName || ("CID " + item.cid);
+  const label =
+    mode === "similar"
+      ? (item.molecularFormula || "") + " · similar structure"
+      : (item.molecularFormula || "") + " · same formula";
+
+  return (
+    '<button type="button" class="compound-card" data-compound-index="' + index + '">' +
+      '<div class="compound-thumb">' +
+        candidateSvg(item.smiles, "compound-" + mode + "-" + index) +
+      '</div>' +
+      '<div class="compound-name">' + esc(title) + '</div>' +
+      '<div class="compound-meta">' + esc(label) + ' · CID ' + esc(item.cid) + '</div>' +
+    '</button>'
+  );
 }
 
 function atomText(node) {
@@ -535,6 +588,9 @@ class MiniOChem extends HTMLElement {
       },
       secondary: null,
       selection: null,
+      relatedMode: null,
+      relatedItems: [],
+      relatedCache: {},
       newmanBondIndex: 0,
       dihedral: 60
     };
@@ -721,6 +777,22 @@ class MiniOChem extends HTMLElement {
       const candidate = self.pendingCandidates[Number(button.dataset.candidate)];
       if (candidate) self.chooseCandidate(candidate);
     });
+
+    this.$(".related-nav button").forEach(function (button) {
+      button.addEventListener("click", function () {
+        self.loadRelated(button.dataset.related);
+      });
+    });
+
+    this.$(".related-results").addEventListener("click", function (event) {
+      const button = event.target.closest("[data-compound-index]");
+      if (!button) return;
+
+      const candidate =
+        self.state.relatedItems[Number(button.dataset.compoundIndex)];
+
+      if (candidate) self.chooseRelated(candidate);
+    });
   }
 
   async resolve(value) {
@@ -770,15 +842,26 @@ class MiniOChem extends HTMLElement {
     const box = this.$(".candidates");
 
     box.innerHTML =
-      '<div class="candidate-head">That molecular formula is not unique. Choose a structure:</div>' +
-      rows.map(function (item, index) {
-        return (
-          '<button type="button" class="candidate" data-candidate="' + index + '">' +
-            '<span>' + esc(item.title || item.iupacName || ("CID " + item.cid)) + '</span>' +
-            '<small>' + esc(item.molecularFormula || "") + ' · CID ' + esc(item.cid) + '</small>' +
-          '</button>'
-        );
-      }).join("");
+      '<div class="candidate-head">' +
+        '<strong>' + esc(result.query) + '</strong> is a molecular formula, so it can describe more than one structure. Choose one:' +
+      '</div>' +
+      '<div class="candidate-grid">' +
+        rows.map(function (item, index) {
+          return (
+            '<button type="button" class="compound-card" data-candidate="' + index + '">' +
+              '<div class="compound-thumb">' +
+                candidateSvg(item.smiles, "candidate-" + index) +
+              '</div>' +
+              '<div class="compound-name">' +
+                esc(item.title || item.iupacName || ("CID " + item.cid)) +
+              '</div>' +
+              '<div class="compound-meta">' +
+                esc(item.molecularFormula || "") + ' · CID ' + esc(item.cid) +
+              '</div>' +
+            '</button>'
+          );
+        }).join("") +
+      '</div>';
 
     box.hidden = false;
   }
@@ -787,6 +870,8 @@ class MiniOChem extends HTMLElement {
     this.state.resolved = result;
     this.state.newmanBondIndex = 0;
     this.state.selection = null;
+    this.state.relatedMode = null;
+    this.state.relatedItems = [];
 
     this.$(".workspace").hidden = false;
     this.$(".status").hidden = false;
@@ -794,6 +879,7 @@ class MiniOChem extends HTMLElement {
     this.$(".candidates").hidden = true;
 
     this.renderIdentity();
+    this.resetRelated();
     this.renderPrimary();
     renderLewisSvg(this.$("#lewisSvg"), result.graph);
     this.setupNewman();
@@ -1134,6 +1220,111 @@ class MiniOChem extends HTMLElement {
       this.showAtomHover(selection.id, null, true);
     } else {
       this.showBondHover(selection.id, null, true);
+    }
+  }
+
+
+  resetRelated() {
+    this.state.relatedMode = null;
+    this.state.relatedItems = [];
+
+    this.$(".related-nav button").forEach(function (button) {
+      button.classList.remove("active");
+    });
+
+    const box = this.$(".related-results");
+    box.hidden = true;
+    box.innerHTML = "";
+  }
+
+  async loadRelated(mode) {
+    if (!this.state.resolved) return;
+
+    const box = this.$(".related-results");
+    const result = this.state.resolved;
+    const meta = result.metadata;
+    const key = mode + ":" + (meta.cid || meta.molecularFormula || result.smiles);
+
+    if (this.state.relatedMode === mode && !box.hidden) {
+      this.resetRelated();
+      return;
+    }
+
+    this.state.relatedMode = mode;
+
+    this.$(".related-nav button").forEach(function (button) {
+      button.classList.toggle("active", button.dataset.related === mode);
+    });
+
+    box.hidden = false;
+    box.innerHTML = '<div class="related-loading">Loading related structures…</div>';
+
+    try {
+      let rows = this.state.relatedCache[key];
+
+      if (!rows) {
+        if (mode === "formula") {
+          rows = await getSameFormulaCandidates(
+            meta.molecularFormula,
+            meta.cid
+          );
+        } else {
+          rows = meta.cid
+            ? await getSimilarCompounds(meta.cid, {
+                threshold: 90,
+                maxRecords: 12
+              })
+            : [];
+        }
+
+        this.state.relatedCache[key] = rows;
+      }
+
+      this.state.relatedItems = rows;
+
+      if (!rows.length) {
+        box.innerHTML =
+          '<div class="related-empty">' +
+          (mode === "similar" && !meta.cid
+            ? "Structural similarity requires a resolved PubChem CID for this molecule."
+            : "No additional compounds were returned for this search.") +
+          '</div>';
+        return;
+      }
+
+      box.innerHTML =
+        '<div class="related-grid">' +
+        rows.map(function (item, index) {
+          return candidateCard(item, index, mode);
+        }).join("") +
+        '</div>';
+    } catch (error) {
+      box.innerHTML =
+        '<div class="related-empty">' +
+        esc(error && error.message ? error.message : String(error)) +
+        '</div>';
+    }
+  }
+
+  async chooseRelated(candidate) {
+    this.$(".query").classList.add("loading");
+
+    try {
+      const result = await resolveCandidate(
+        candidate,
+        candidate.title || candidate.iupacName || ("CID " + candidate.cid)
+      );
+
+      this.$(".query").value =
+        candidate.title || candidate.iupacName || ("CID " + candidate.cid);
+
+      this.applyResolved(result);
+    } catch (error) {
+      this.$(".error").textContent =
+        error && error.message ? error.message : String(error);
+      this.$(".error").hidden = false;
+    } finally {
+      this.$(".query").classList.remove("loading");
     }
   }
 
