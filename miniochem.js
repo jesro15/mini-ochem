@@ -738,7 +738,7 @@ class MiniOChem extends HTMLElement {
       });
     });
 
-    this.$("[data-overlay]").forEach(function (input) {
+    this.$$("[data-overlay]").forEach(function (input) {
       input.addEventListener("change", function () {
         self.state.overlays[input.dataset.overlay] = input.checked;
         self.renderPrimary();
@@ -856,7 +856,7 @@ class MiniOChem extends HTMLElement {
       if (candidate) self.chooseCandidate(candidate);
     });
 
-    this.$(".related-nav button").forEach(function (button) {
+    this.$$(".related-nav button").forEach(function (button) {
       button.addEventListener("click", function () {
         self.loadRelated(button.dataset.related);
       });
@@ -1275,7 +1275,7 @@ class MiniOChem extends HTMLElement {
   updateSelectionVisuals() {
     const selection = this.state.selection;
 
-    this.$(".atom-hit").forEach(function (target) {
+    this.$$(".atom-hit").forEach(function (target) {
       target.classList.toggle(
         "selected",
         Boolean(
@@ -1286,7 +1286,7 @@ class MiniOChem extends HTMLElement {
       );
     });
 
-    this.$(".bond-hit").forEach(function (target) {
+    this.$$(".bond-hit").forEach(function (target) {
       target.classList.toggle(
         "selected",
         Boolean(
@@ -1316,7 +1316,7 @@ class MiniOChem extends HTMLElement {
     this.state.relatedMode = null;
     this.state.relatedItems = [];
 
-    this.$(".related-nav button").forEach(function (button) {
+    this.$$(".related-nav button").forEach(function (button) {
       button.classList.remove("active");
     });
 
@@ -1340,7 +1340,7 @@ class MiniOChem extends HTMLElement {
 
     this.state.relatedMode = mode;
 
-    this.$(".related-nav button").forEach(function (button) {
+    this.$$(".related-nav button").forEach(function (button) {
       button.classList.toggle("active", button.dataset.related === mode);
     });
 
