@@ -234,13 +234,49 @@ export function validateGraph(graph) {
 
 export function atomHybridization(graph, id) {
   const node = graph.nodes[id];
-  const orders = graph.neighbors(id).map((neighbor) => neighbor.order);
+  const neighbors = graph.neighbors(id);
+  const orders = neighbors.map(function (neighbor) {
+    return neighbor.order;
+  });
 
   if (node.aromatic) return "sp2";
-  if (orders.some((order) => order === 3)) return "sp";
-  if (orders.some((order) => order === 2)) return "sp2";
+  if (orders.some(function (order) { return order === 3; })) return "sp";
+  if (orders.some(function (order) { return order === 2; })) return "sp2";
 
-  if (node.el === "C" || node.el === "N" || node.el === "O" || node.el === "S") {
+  // A classical carbocation is trigonal planar because the cationic center
+  // needs an empty, unhybridized p orbital.
+  if (node.el === "C" && node.charge > 0) return "sp2";
+
+  // Lone-pair or anionic conjugation: if the atom can donate into an adjacent
+  // pi system (or empty p orbital), retain a p orbital and treat it as sp2.
+  const canCarryLonePair =
+    node.el === "N" ||
+    node.el === "O" ||
+    node.el === "S" ||
+    node.el === "P" ||
+    (node.el === "C" && node.charge < 0);
+
+  if (canCarryLonePair) {
+    const conjugated = neighbors.some(function (neighbor) {
+      const adjacent = graph.nodes[neighbor.id];
+      if (adjacent.aromatic) return true;
+      if (adjacent.charge > 0) return true;
+
+      return graph.neighbors(adjacent.id).some(function (second) {
+        return second.id !== id && second.order >= 2;
+      });
+    });
+
+    if (conjugated) return "sp2";
+  }
+
+  if (
+    node.el === "C" ||
+    node.el === "N" ||
+    node.el === "O" ||
+    node.el === "S" ||
+    node.el === "P"
+  ) {
     return "sp3";
   }
 
