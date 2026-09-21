@@ -8,8 +8,7 @@ import {
 
 import {
   resolveMolecule,
-  resolveCandidate,
-  OCL
+  resolveCandidate
 } from "./molecule-resolver.js";
 
 import { Molecule3DView } from "./render-3d.js";
@@ -27,38 +26,52 @@ const TEMPLATE = [
     '<div class="status" hidden>',
       '<span id="identity"></span>',
       '<span id="source"></span>',
+      '<span id="geometrySource"></span>',
     '</div>',
 
     '<div class="error" hidden></div>',
     '<div class="candidates" hidden></div>',
 
     '<section class="workspace" hidden>',
-      '<nav class="tabs" aria-label="Molecule representations">',
-        '<button type="button" class="tab active" data-view="lewis">Lewis</button>',
-        '<button type="button" class="tab" data-view="skeletal">Skeletal</button>',
-        '<button type="button" class="tab" data-view="3d">3D / ball + stick</button>',
-        '<button type="button" class="tab" data-view="newman">Newman projection</button>',
-        '<button type="button" class="tab" data-view="symmetry">Symmetry</button>',
-        '<button type="button" class="tab" data-view="hybridization">Hybridization</button>',
-        '<button type="button" class="tab" data-view="conformations">Conformations</button>',
-      '</nav>',
-
-      '<section class="panel active" data-panel="lewis">',
-        '<svg id="lewisSvg" viewBox="0 0 1000 620" aria-label="Lewis structure view"></svg>',
-      '</section>',
-
-      '<section class="panel" data-panel="skeletal">',
-        '<div class="center-stage" id="skeletal"></div>',
-      '</section>',
-
-      '<section class="panel" data-panel="3d">',
-        '<div class="stage" id="stage3d">',
-          '<div class="stage-help">drag to orbit · scroll to zoom · right-drag to pan</div>',
+      '<div class="toolbar">',
+        '<div class="segmented" aria-label="Primary representation">',
+          '<button type="button" class="view-button active" data-view="skeletal">Skeletal</button>',
+          '<button type="button" class="view-button" data-view="3d">3D ball + stick</button>',
         '</div>',
-        '<div class="footnote">Idealized teaching geometry from local hybridization/VSEPR rules; not an energy-minimized conformer.</div>',
+
+        '<div class="overlays" aria-label="Overlays">',
+          '<label><input type="checkbox" data-overlay="hybridization">Hybridization</label>',
+          '<label><input type="checkbox" data-overlay="lengths">Bond lengths</label>',
+          '<label><input type="checkbox" data-overlay="angles">Bond angles</label>',
+        '</div>',
+      '</div>',
+
+      '<div class="primary-stage">',
+        '<div class="primary-panel active" data-primary="skeletal">',
+          '<svg id="skeletalSvg" viewBox="0 0 1000 620" aria-label="Skeletal structure"></svg>',
+        '</div>',
+        '<div class="primary-panel" data-primary="3d">',
+          '<div class="stage" id="stage3d">',
+            '<div class="stage-help">drag to orbit · scroll to zoom · hover atoms or bonds</div>',
+          '</div>',
+        '</div>',
+        '<div class="hover-card" hidden></div>',
+      '</div>',
+
+      '<div class="provenance"></div>',
+
+      '<div class="secondary-nav">',
+        '<span>Other views</span>',
+        '<button type="button" data-secondary="lewis">Lewis</button>',
+        '<button type="button" data-secondary="newman">Newman</button>',
+        '<button type="button" data-secondary="symmetry">Symmetry</button>',
+      '</div>',
+
+      '<section class="secondary-panel" data-secondary-panel="lewis" hidden>',
+        '<svg id="lewisSvg" viewBox="0 0 1000 620"></svg>',
       '</section>',
 
-      '<section class="panel" data-panel="newman">',
+      '<section class="secondary-panel" data-secondary-panel="newman" hidden>',
         '<div class="split">',
           '<div class="newman-stage">',
             '<svg id="newmanSvg" viewBox="0 0 560 500"></svg>',
@@ -83,7 +96,7 @@ const TEMPLATE = [
         '</div>',
       '</section>',
 
-      '<section class="panel" data-panel="symmetry">',
+      '<section class="secondary-panel" data-secondary-panel="symmetry" hidden>',
         '<div class="split">',
           '<div class="stage" id="stageSym"></div>',
           '<aside class="controls">',
@@ -114,24 +127,16 @@ const TEMPLATE = [
                 '<option value="yz">yz plane</option>',
               '</select>',
             '</label>',
-            '<div class="result-note">Compare the solid molecule with the pale reference after the operation. Exact point-group assignment is intentionally not inferred yet.</div>',
+            '<div class="result-note">This is an operation explorer, not an automatic point-group assignment.</div>',
           '</aside>',
         '</div>',
-      '</section>',
-
-      '<section class="panel" data-panel="hybridization">',
-        '<div class="cards" id="hybridCards"></div>',
-      '</section>',
-
-      '<section class="panel" data-panel="conformations">',
-        '<div class="conformation-list" id="rotatableList"></div>',
       '</section>',
     '</section>',
   '</main>'
 ].join("");
 
 function esc(value) {
-  return String(value)
+  return String(value == null ? "" : value)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -139,9 +144,7 @@ function esc(value) {
 }
 
 function atomText(node) {
-  const h = node.hCount
-    ? "H" + (node.hCount > 1 ? node.hCount : "")
-    : "";
+  const h = node.hCount ? "H" + (node.hCount > 1 ? node.hCount : "") : "";
   const charge =
     node.charge > 0 ? "+" + (node.charge > 1 ? node.charge : "") :
     node.charge < 0 ? "−" + (node.charge < -1 ? Math.abs(node.charge) : "") :
@@ -149,39 +152,307 @@ function atomText(node) {
   return node.el + h + charge;
 }
 
-function treeLayout(graph, width, height) {
+function point3(value) {
+  return value && value.length >= 3
+    ? { x: value[0], y: value[1], z: value[2] }
+    : null;
+}
+
+function distance(a, b) {
+  if (!a || !b) return null;
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  const dz = a.z - b.z;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+function angleDegrees(a, center, b) {
+  if (!a || !center || !b) return null;
+
+  const ax = a.x - center.x;
+  const ay = a.y - center.y;
+  const az = a.z - center.z;
+  const bx = b.x - center.x;
+  const by = b.y - center.y;
+  const bz = b.z - center.z;
+
+  const amag = Math.sqrt(ax * ax + ay * ay + az * az);
+  const bmag = Math.sqrt(bx * bx + by * by + bz * bz);
+  if (!amag || !bmag) return null;
+
+  const cosine = Math.max(
+    -1,
+    Math.min(1, (ax * bx + ay * by + az * bz) / (amag * bmag))
+  );
+
+  return Math.acos(cosine) * 180 / Math.PI;
+}
+
+function referenceBondLength(graph, bond) {
+  const a = graph.nodes[bond.a].el;
+  const b = graph.nodes[bond.b].el;
+  const key = [a, b].sort().join("-");
+  const order = bond.order;
+
+  if (key === "C-C") return order === 3 ? 1.20 : order === 2 ? 1.34 : 1.54;
+  if (key === "C-N") return order === 3 ? 1.16 : order === 2 ? 1.30 : 1.47;
+  if (key === "C-O") return order === 2 ? 1.23 : 1.43;
+  if (key === "N-O") return order === 2 ? 1.21 : 1.40;
+  if (key === "C-S") return order === 2 ? 1.61 : 1.82;
+  return 1.48;
+}
+
+function idealAngle(hybrid) {
+  if (hybrid === "sp") return 180;
+  if (hybrid === "sp2") return 120;
+  if (hybrid === "sp3") return 109.5;
+  return null;
+}
+
+function geometryPoint(result, atomId) {
+  if (!result || !result.geometry || !result.geometry.atomPositions) return null;
+  return point3(result.geometry.atomPositions[atomId]);
+}
+
+function bondMetric(result, bond) {
+  const a = geometryPoint(result, bond.a);
+  const b = geometryPoint(result, bond.b);
+  const measured = distance(a, b);
+
+  if (Number.isFinite(measured)) {
+    return {
+      value: measured,
+      source: result.geometry.source,
+      kind: result.geometry.kind
+    };
+  }
+
+  return {
+    value: referenceBondLength(result.graph, bond),
+    source: "reference fallback",
+    kind: "reference"
+  };
+}
+
+function angleMetrics(result, atomId) {
+  const graph = result.graph;
+  const center = geometryPoint(result, atomId);
+  const neighbors = graph.neighbors(atomId);
+
+  if (center && result.geometry) {
+    const points = neighbors.map(function (neighbor) {
+      return {
+        label: graph.nodes[neighbor.id].el + String(neighbor.id + 1),
+        point: geometryPoint(result, neighbor.id)
+      };
+    }).filter(function (item) {
+      return item.point;
+    });
+
+    const hydrogens =
+      result.geometry.hydrogenPositions &&
+      result.geometry.hydrogenPositions[atomId]
+        ? result.geometry.hydrogenPositions[atomId]
+        : [];
+
+    hydrogens.forEach(function (coords, index) {
+      points.push({
+        label: hydrogens.length > 1 ? "H" + String(index + 1) : "H",
+        point: point3(coords)
+      });
+    });
+
+    const rows = [];
+    for (let i = 0; i < points.length; i += 1) {
+      for (let j = i + 1; j < points.length; j += 1) {
+        const value = angleDegrees(points[i].point, center, points[j].point);
+        if (!Number.isFinite(value)) continue;
+
+        rows.push({
+          label:
+            points[i].label +
+            "–" +
+            graph.nodes[atomId].el +
+            String(atomId + 1) +
+            "–" +
+            points[j].label,
+          value: value
+        });
+      }
+    }
+
+    return {
+      rows: rows,
+      source: result.geometry.source,
+      kind: result.geometry.kind
+    };
+  }
+
+  const hybrid = atomHybridization(graph, atomId);
+  const fallback = idealAngle(hybrid);
+
+  return {
+    rows: fallback == null
+      ? []
+      : [{ label: "ideal " + hybrid + " angle", value: fallback }],
+    source: "idealized hybridization geometry",
+    kind: "reference"
+  };
+}
+
+function geometryLabel(result) {
+  if (result && result.geometry) {
+    return result.geometry.source + " · computed coordinates";
+  }
+  return "idealized geometry fallback";
+}
+
+function build2DPositions(molecule, graph) {
+  if (typeof molecule.inventCoordinates === "function") {
+    molecule.inventCoordinates();
+  }
+
+  const heavyIndices = [];
+  for (let atom = 0; atom < molecule.getAllAtoms(); atom += 1) {
+    if (molecule.getAtomicNo(atom) !== 1) heavyIndices.push(atom);
+  }
+
+  const raw = graph.nodes.map(function (node, index) {
+    const atom = Number.isInteger(node.sourceAtomIndex)
+      ? node.sourceAtomIndex
+      : heavyIndices[index];
+
+    return {
+      x: molecule.getAtomX(atom),
+      y: molecule.getAtomY(atom)
+    };
+  });
+
+  const xs = raw.map(function (p) { return p.x; });
+  const ys = raw.map(function (p) { return p.y; });
+  const minX = Math.min.apply(null, xs);
+  const maxX = Math.max.apply(null, xs);
+  const minY = Math.min.apply(null, ys);
+  const maxY = Math.max.apply(null, ys);
+
+  const spanX = Math.max(1, maxX - minX);
+  const spanY = Math.max(1, maxY - minY);
+  const scale = Math.min(760 / spanX, 430 / spanY);
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+
+  return raw.map(function (p) {
+    return {
+      x: 500 + (p.x - centerX) * scale,
+      y: 310 - (p.y - centerY) * scale
+    };
+  });
+}
+
+function renderSkeletalSvg(svg, molecule, result) {
+  const graph = result.graph;
+  const positions = build2DPositions(molecule, graph);
+  const parts = [];
+
+  graph.bonds.forEach(function (bond) {
+    const a = positions[bond.a];
+    const b = positions[bond.b];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const length = Math.hypot(dx, dy) || 1;
+    const ox = (-dy / length) * 6;
+    const oy = (dx / length) * 6;
+    const order = Math.max(1, Math.min(3, Math.round(bond.order)));
+
+    for (let i = 0; i < order; i += 1) {
+      const shift = i - (order - 1) / 2;
+      parts.push(
+        '<line class="bond-line" x1="' + (a.x + ox * shift) +
+        '" y1="' + (a.y + oy * shift) +
+        '" x2="' + (b.x + ox * shift) +
+        '" y2="' + (b.y + oy * shift) +
+        '"/>'
+      );
+    }
+  });
+
+  graph.nodes.forEach(function (node) {
+    const p = positions[node.id];
+    const degree = graph.neighbors(node.id).length;
+    const shouldLabel =
+      node.el !== "C" ||
+      node.charge !== 0 ||
+      degree === 0;
+
+    if (shouldLabel) {
+      parts.push(
+        '<rect class="atom-label-bg" x="' + (p.x - 28) + '" y="' + (p.y - 20) +
+        '" width="56" height="40" rx="8"/>'
+      );
+      parts.push(
+        '<text class="atom-label" x="' + p.x + '" y="' + (p.y + 6) +
+        '" text-anchor="middle">' + esc(atomText(node)) + '</text>'
+      );
+    }
+  });
+
+  graph.bonds.forEach(function (bond) {
+    const a = positions[bond.a];
+    const b = positions[bond.b];
+
+    parts.push(
+      '<line class="bond-hit" data-bond-id="' + bond.id +
+      '" x1="' + a.x + '" y1="' + a.y +
+      '" x2="' + b.x + '" y2="' + b.y + '"/>'
+    );
+  });
+
+  graph.nodes.forEach(function (node) {
+    const p = positions[node.id];
+    parts.push(
+      '<circle class="atom-hit" data-atom-id="' + node.id +
+      '" cx="' + p.x + '" cy="' + p.y + '" r="24"/>'
+    );
+  });
+
+  svg.innerHTML = parts.join("");
+  return positions;
+}
+
+function renderLewisSvg(svg, graph) {
+  const width = 1000;
+  const height = 620;
+  const positions = [];
   const start =
     graph.nodes.find(function (node) {
       return graph.neighbors(node.id).length <= 1;
     }) || graph.nodes[0];
 
-  const level = new Map([[start.id, 0]]);
+  const levels = new Map([[start.id, 0]]);
   const queue = [start.id];
 
   while (queue.length) {
     const id = queue.shift();
     graph.neighbors(id).forEach(function (neighbor) {
-      if (!level.has(neighbor.id)) {
-        level.set(neighbor.id, level.get(id) + 1);
+      if (!levels.has(neighbor.id)) {
+        levels.set(neighbor.id, levels.get(id) + 1);
         queue.push(neighbor.id);
       }
     });
   }
 
-  const maxLevel = Math.max.apply(null, Array.from(level.values()).concat([1]));
+  const maxLevel = Math.max.apply(null, Array.from(levels.values()).concat([1]));
   const grouped = new Map();
 
-  level.forEach(function (value, id) {
-    if (!grouped.has(value)) grouped.set(value, []);
-    grouped.get(value).push(id);
+  levels.forEach(function (level, id) {
+    if (!grouped.has(level)) grouped.set(level, []);
+    grouped.get(level).push(id);
   });
 
-  const positions = [];
-
-  grouped.forEach(function (ids, value) {
+  grouped.forEach(function (ids, level) {
     ids.forEach(function (id, index) {
       positions[id] = {
-        x: 90 + (width - 180) * (value / maxLevel),
+        x: 90 + (width - 180) * (level / maxLevel),
         y:
           ids.length === 1
             ? height / 2
@@ -190,13 +461,6 @@ function treeLayout(graph, width, height) {
     });
   });
 
-  return positions;
-}
-
-function renderLewisSvg(svg, graph) {
-  const width = 1000;
-  const height = 620;
-  const positions = treeLayout(graph, width, height);
   const parts = [];
 
   graph.bonds.forEach(function (bond) {
@@ -224,49 +488,30 @@ function renderLewisSvg(svg, graph) {
   graph.nodes.forEach(function (node) {
     const p = positions[node.id];
     const lonePairs = ELEMENTS[node.el] ? ELEMENTS[node.el].lonePairs : 0;
-    const pairCount = Math.min(lonePairs, 3);
 
     parts.push(
       '<rect x="' + (p.x - 31) + '" y="' + (p.y - 23) +
       '" width="62" height="46" rx="12" fill="#fffdf8"/>'
     );
-
     parts.push(
       '<text x="' + p.x + '" y="' + (p.y + 6) +
       '" text-anchor="middle" font-size="20" font-family="ui-monospace,monospace" fill="#171714">' +
       esc(atomText(node)) + '</text>'
     );
 
-    parts.push(
-      '<text x="' + p.x + '" y="' + (p.y + 48) +
-      '" text-anchor="middle" font-size="11" font-family="ui-sans-serif,sans-serif" fill="#858077">' +
-      esc(atomHybridization(graph, node.id)) + '</text>'
-    );
-
-    for (let pair = 0; pair < pairCount; pair += 1) {
+    for (let pair = 0; pair < Math.min(lonePairs, 3); pair += 1) {
       const angle =
         -Math.PI / 2 +
-        (pair - (pairCount - 1) / 2) * 0.64;
+        (pair - (Math.min(lonePairs, 3) - 1) / 2) * 0.64;
       const cx = p.x + Math.cos(angle) * 44;
       const cy = p.y + Math.sin(angle) * 44;
 
-      parts.push(
-        '<circle cx="' + (cx - 2.7) + '" cy="' + cy + '" r="2" fill="#c74e38"/>'
-      );
-      parts.push(
-        '<circle cx="' + (cx + 2.7) + '" cy="' + cy + '" r="2" fill="#c74e38"/>'
-      );
+      parts.push('<circle cx="' + (cx - 2.7) + '" cy="' + cy + '" r="2" fill="#c74e38"/>');
+      parts.push('<circle cx="' + (cx + 2.7) + '" cy="' + cy + '" r="2" fill="#c74e38"/>');
     }
   });
 
   svg.innerHTML = parts.join("");
-}
-
-function localGeometry(hybrid) {
-  if (hybrid === "sp") return "linear · ~180°";
-  if (hybrid === "sp2") return "trigonal planar · ~120°";
-  if (hybrid === "sp3") return "tetrahedral electron geometry · ~109.5°";
-  return "not classified";
 }
 
 class MiniOChem extends HTMLElement {
@@ -282,15 +527,21 @@ class MiniOChem extends HTMLElement {
 
     this.state = {
       resolved: null,
-      graph: null,
-      molecule: null,
-      currentView: "lewis",
+      view: "skeletal",
+      overlays: {
+        hybridization: false,
+        lengths: false,
+        angles: false
+      },
+      secondary: null,
       newmanBondIndex: 0,
       dihedral: 60
     };
 
     this.threeView = null;
+    this.symmetryView = null;
     this.resizeObserver = null;
+    this.pendingCandidates = null;
   }
 
   connectedCallback() {
@@ -307,12 +558,15 @@ class MiniOChem extends HTMLElement {
     }
 
     const view = this.getAttribute("view");
-    if (view) this.setView(view);
+    if (view === "3d" || view === "skeletal") {
+      this.setView(view);
+    }
   }
 
   disconnectedCallback() {
     if (this.resizeObserver) this.resizeObserver.disconnect();
     if (this.threeView) this.threeView.dispose();
+    if (this.symmetryView) this.symmetryView.dispose();
   }
 
   attributeChangedCallback(name, oldValue, newValue) {
@@ -323,7 +577,9 @@ class MiniOChem extends HTMLElement {
       this.resolve(newValue);
     }
 
-    if (name === "view" && newValue) this.setView(newValue);
+    if (name === "view" && (newValue === "3d" || newValue === "skeletal")) {
+      this.setView(newValue);
+    }
   }
 
   $(selector) {
@@ -342,9 +598,46 @@ class MiniOChem extends HTMLElement {
       self.resolve(self.$(".query").value);
     });
 
-    this.$$(".tab").forEach(function (tab) {
-      tab.addEventListener("click", function () {
-        self.setView(tab.dataset.view);
+    this.$$(".view-button").forEach(function (button) {
+      button.addEventListener("click", function () {
+        self.setView(button.dataset.view);
+      });
+    });
+
+    this.$$("[data-overlay]").forEach(function (input) {
+      input.addEventListener("change", function () {
+        self.state.overlays[input.dataset.overlay] = input.checked;
+        self.hideHover();
+      });
+    });
+
+    this.$("#skeletalSvg").addEventListener("pointermove", function (event) {
+      const target = event.target.closest("[data-atom-id],[data-bond-id]");
+      if (!target) {
+        self.hideHover();
+        return;
+      }
+
+      const rect = self.$(".primary-stage").getBoundingClientRect();
+      const point = {
+        localX: event.clientX - rect.left,
+        localY: event.clientY - rect.top
+      };
+
+      if (target.hasAttribute("data-atom-id")) {
+        self.showAtomHover(Number(target.dataset.atomId), point);
+      } else {
+        self.showBondHover(Number(target.dataset.bondId), point);
+      }
+    });
+
+    this.$("#skeletalSvg").addEventListener("pointerleave", function () {
+      self.hideHover();
+    });
+
+    this.$$(".secondary-nav button").forEach(function (button) {
+      button.addEventListener("click", function () {
+        self.toggleSecondary(button.dataset.secondary);
       });
     });
 
@@ -359,7 +652,7 @@ class MiniOChem extends HTMLElement {
       self.renderNewman();
     });
 
-    this.$$(".presets [data-angle]").forEach(function (button) {
+    this.$$("[data-angle]").forEach(function (button) {
       button.addEventListener("click", function () {
         const angle = Number(button.dataset.angle);
         self.state.dihedral = angle;
@@ -374,8 +667,7 @@ class MiniOChem extends HTMLElement {
     });
 
     this.$("#symAngle").addEventListener("input", function () {
-      self.$("#symAngleValue").textContent =
-        self.$("#symAngle").value + "°";
+      self.$("#symAngleValue").textContent = self.$("#symAngle").value + "°";
       self.updateSymmetry();
     });
 
@@ -396,32 +688,14 @@ class MiniOChem extends HTMLElement {
       const button = event.target.closest("[data-candidate]");
       if (!button) return;
 
-      const index = Number(button.dataset.candidate);
-      const candidate = self.pendingCandidates[index];
+      const candidate = self.pendingCandidates[Number(button.dataset.candidate)];
       if (candidate) self.chooseCandidate(candidate);
-    });
-
-    this.$("#rotatableList").addEventListener("click", function (event) {
-      const button = event.target.closest("[data-newman-index]");
-      if (!button) return;
-
-      const index = Number(button.dataset.newmanIndex);
-      self.state.newmanBondIndex = index;
-      self.$("#newmanBond").value = String(index);
-      self.setView("newman");
-      self.renderNewman();
     });
   }
 
   async resolve(value) {
-    const error = this.$(".error");
-    const candidates = this.$(".candidates");
-
-    error.hidden = true;
-    candidates.hidden = true;
-    candidates.innerHTML = "";
-    this.pendingCandidates = null;
-
+    this.$(".error").hidden = true;
+    this.$(".candidates").hidden = true;
     this.$(".query").classList.add("loading");
 
     try {
@@ -434,9 +708,10 @@ class MiniOChem extends HTMLElement {
       }
 
       this.applyResolved(result);
-    } catch (err) {
-      error.textContent = err && err.message ? err.message : String(err);
-      error.hidden = false;
+    } catch (error) {
+      this.$(".error").textContent =
+        error && error.message ? error.message : String(error);
+      this.$(".error").hidden = false;
     } finally {
       this.$(".query").classList.remove("loading");
     }
@@ -444,7 +719,6 @@ class MiniOChem extends HTMLElement {
 
   async chooseCandidate(candidate) {
     this.$(".query").classList.add("loading");
-    this.$(".candidates").hidden = true;
 
     try {
       const result = await resolveCandidate(
@@ -452,9 +726,9 @@ class MiniOChem extends HTMLElement {
         this.$(".query").value
       );
       this.applyResolved(result);
-    } catch (err) {
+    } catch (error) {
       this.$(".error").textContent =
-        err && err.message ? err.message : String(err);
+        error && error.message ? error.message : String(error);
       this.$(".error").hidden = false;
     } finally {
       this.$(".query").classList.remove("loading");
@@ -462,8 +736,8 @@ class MiniOChem extends HTMLElement {
   }
 
   renderCandidates(result) {
-    const box = this.$(".candidates");
     const rows = result.candidates || [];
+    const box = this.$(".candidates");
 
     box.innerHTML =
       '<div class="candidate-head">That molecular formula is not unique. Choose a structure:</div>' +
@@ -481,8 +755,6 @@ class MiniOChem extends HTMLElement {
 
   applyResolved(result) {
     this.state.resolved = result;
-    this.state.graph = result.graph;
-    this.state.molecule = result.molecule;
     this.state.newmanBondIndex = 0;
 
     this.$(".workspace").hidden = false;
@@ -491,20 +763,18 @@ class MiniOChem extends HTMLElement {
     this.$(".candidates").hidden = true;
 
     this.renderIdentity();
-    this.renderLewis();
-    this.renderSkeletal();
-    this.ensureThree();
-    this.threeView.setGraph(result.graph);
+    this.renderPrimary();
+    renderLewisSvg(this.$("#lewisSvg"), result.graph);
     this.setupNewman();
-    this.renderHybridization();
-    this.renderConformations();
 
-    if (this.state.currentView === "3d") {
-      this.mountThree(this.$("#stage3d"), false);
-    }
+    this.ensureThreeViews();
+    this.threeView.setGraph(result.graph, result.geometry);
+    this.symmetryView.setGraph(result.graph, result.geometry);
 
-    if (this.state.currentView === "symmetry") {
-      this.mountThree(this.$("#stageSym"), true);
+    this.setView(this.state.view);
+
+    if (this.state.secondary === "symmetry") {
+      this.mountSymmetry();
     }
 
     if (this.getAttribute("molecule") !== result.query) {
@@ -529,86 +799,234 @@ class MiniOChem extends HTMLElement {
     const result = this.state.resolved;
     const meta = result.metadata;
 
-    const identity = [
+    this.$("#identity").textContent = [
       meta.title && meta.title !== result.query ? meta.title : "",
       meta.molecularFormula || molecularFormula(result.graph),
       meta.cid ? "CID " + meta.cid : ""
-    ].filter(Boolean).join(" · ");
+    ].filter(Boolean).join(" · ") || result.query;
 
-    this.$("#identity").textContent = identity || result.query;
     this.$("#source").textContent = result.inputType;
+    this.$("#geometrySource").textContent = geometryLabel(result);
+
+    this.$(".provenance").textContent = result.geometry
+      ? "Geometry values are calculated from " + result.geometry.source +
+        ". This is molecule-specific computed geometry, not an experimental literature measurement."
+      : "No molecule-specific 3D conformer was available; geometry falls back to idealized hybridization angles and reference bond lengths.";
   }
 
-  renderLewis() {
-    renderLewisSvg(this.$("#lewisSvg"), this.state.graph);
-  }
-
-  renderSkeletal() {
-    const molecule = this.state.molecule;
-    if (typeof molecule.inventCoordinates === "function") {
-      molecule.inventCoordinates();
-    }
-
-    this.$("#skeletal").innerHTML = molecule.toSVG(
-      920,
-      620,
-      "molecule",
-      {
-        autoCrop: true,
-        autoCropMargin: 28,
-        factorTextSize: 1.08
-      }
+  renderPrimary() {
+    if (!this.state.resolved) return;
+    renderSkeletalSvg(
+      this.$("#skeletalSvg"),
+      this.state.resolved.molecule,
+      this.state.resolved
     );
   }
 
-  ensureThree() {
-    if (this.threeView) return;
+  ensureThreeViews() {
+    if (!this.threeView) {
+      this.threeView = new Molecule3DView();
+      const self = this;
 
-    this.threeView = new Molecule3DView();
-    const self = this;
+      this.threeView.setHoverHandler(function (hit, point) {
+        if (!hit || !point) {
+          self.hideHover();
+          return;
+        }
 
-    this.resizeObserver = new ResizeObserver(function () {
-      if (!self.threeView) return;
-      const canvas = self.threeView.renderer.domElement;
-      const host = canvas.parentElement;
-      if (host) {
-        self.threeView.resize(
-          host.clientWidth,
-          host.clientHeight || 620
-        );
-      }
-    });
+        const stageRect = self.$(".primary-stage").getBoundingClientRect();
+        const canvasRect =
+          self.threeView.renderer.domElement.getBoundingClientRect();
 
-    this.resizeObserver.observe(this);
-  }
+        const localPoint = {
+          localX: canvasRect.left - stageRect.left + point.localX,
+          localY: canvasRect.top - stageRect.top + point.localY
+        };
 
-  mountThree(target, symmetryMode) {
-    this.ensureThree();
-    this.threeView.mount(target);
-
-    if (symmetryMode) {
-      this.updateSymmetry();
-    } else {
-      this.threeView.setNormalMode();
+        if (hit.kind === "atom" && !hit.isHydrogen) {
+          self.showAtomHover(hit.sourceId, localPoint);
+        } else if (hit.kind === "bond" && Number.isInteger(hit.sourceBondId)) {
+          self.showBondHover(hit.sourceBondId, localPoint);
+        } else {
+          self.hideHover();
+        }
+      });
     }
 
-    const self = this;
-    requestAnimationFrame(function () {
-      self.threeView.resize(
-        target.clientWidth,
-        target.clientHeight || 620
-      );
+    if (!this.symmetryView) {
+      this.symmetryView = new Molecule3DView();
+    }
+
+    if (!this.resizeObserver) {
+      const self = this;
+      this.resizeObserver = new ResizeObserver(function () {
+        self.resizeThreeViews();
+      });
+      this.resizeObserver.observe(this);
+    }
+  }
+
+  resizeThreeViews() {
+    if (this.threeView && this.state.view === "3d") {
+      const stage = this.$("#stage3d");
+      this.threeView.resize(stage.clientWidth, stage.clientHeight || 620);
+    }
+
+    if (this.symmetryView && this.state.secondary === "symmetry") {
+      const stage = this.$("#stageSym");
+      this.symmetryView.resize(stage.clientWidth, stage.clientHeight || 620);
+    }
+  }
+
+  setView(view) {
+    const normalized = view === "3d" ? "3d" : "skeletal";
+    this.state.view = normalized;
+    this.hideHover();
+
+    this.$$(".view-button").forEach(function (button) {
+      button.classList.toggle("active", button.dataset.view === normalized);
     });
+
+    this.$$(".primary-panel").forEach(function (panel) {
+      panel.classList.toggle("active", panel.dataset.primary === normalized);
+    });
+
+    if (normalized === "3d" && this.state.resolved) {
+      const stage = this.$("#stage3d");
+      this.threeView.mount(stage);
+      this.threeView.setNormalMode();
+
+      const self = this;
+      requestAnimationFrame(function () {
+        self.threeView.resize(stage.clientWidth, stage.clientHeight || 620);
+      });
+    }
+
+    if (this.getAttribute("view") !== normalized) {
+      this.setAttribute("view", normalized);
+    }
+
+    this.dispatchEvent(new CustomEvent("viewchange", {
+      detail: { view: normalized },
+      bubbles: true,
+      composed: true
+    }));
+  }
+
+  showAtomHover(atomId, point) {
+    if (!this.state.resolved) return;
+
+    const graph = this.state.resolved.graph;
+    const node = graph.nodes[atomId];
+    if (!node) return;
+
+    const sections = [
+      '<strong>' + esc(node.el + String(atomId + 1)) + '</strong>'
+    ];
+
+    if (this.state.overlays.hybridization) {
+      sections.push(
+        '<div><span>hybridization</span> ' +
+        '<b>' + esc(atomHybridization(graph, atomId)) + '</b></div>'
+      );
+    }
+
+    if (this.state.overlays.angles) {
+      const metrics = angleMetrics(this.state.resolved, atomId);
+      const rows = metrics.rows.slice(0, 8);
+
+      if (rows.length) {
+        sections.push(
+          '<div class="metric-list">' +
+          rows.map(function (row) {
+            return '<span>' + esc(row.label) + ' <b>' +
+              row.value.toFixed(1) + '°</b></span>';
+          }).join("") +
+          '</div>'
+        );
+      }
+    }
+
+    if (
+      !this.state.overlays.hybridization &&
+      !this.state.overlays.angles
+    ) {
+      sections.push('<small>enable an atom overlay above</small>');
+    }
+
+    this.showHover(sections.join(""), point);
+  }
+
+  showBondHover(bondId, point) {
+    if (!this.state.resolved) return;
+
+    const graph = this.state.resolved.graph;
+    const bond = graph.bonds[bondId];
+    if (!bond) return;
+
+    const a = graph.nodes[bond.a];
+    const b = graph.nodes[bond.b];
+
+    const sections = [
+      '<strong>' +
+      esc(a.el + String(a.id + 1) + "–" + b.el + String(b.id + 1)) +
+      '</strong>'
+    ];
+
+    if (this.state.overlays.lengths) {
+      const metric = bondMetric(this.state.resolved, bond);
+      sections.push(
+        '<div><span>bond length</span> <b>' +
+        metric.value.toFixed(3) + ' Å</b></div>'
+      );
+    } else {
+      sections.push('<small>enable bond lengths above</small>');
+    }
+
+    this.showHover(sections.join(""), point);
+  }
+
+  showHover(html, point) {
+    const card = this.$(".hover-card");
+    card.innerHTML = html;
+    card.hidden = false;
+
+    const x = Math.max(12, Math.min(point.localX + 16, this.$(".primary-stage").clientWidth - 260));
+    const y = Math.max(12, point.localY + 16);
+
+    card.style.left = x + "px";
+    card.style.top = y + "px";
+  }
+
+  hideHover() {
+    this.$(".hover-card").hidden = true;
+  }
+
+  toggleSecondary(name) {
+    const next = this.state.secondary === name ? null : name;
+    this.state.secondary = next;
+
+    this.$$(".secondary-nav button").forEach(function (button) {
+      button.classList.toggle("active", button.dataset.secondary === next);
+    });
+
+    this.$$(".secondary-panel").forEach(function (panel) {
+      panel.hidden = panel.dataset.secondaryPanel !== next;
+    });
+
+    if (next === "symmetry" && this.state.resolved) {
+      this.mountSymmetry();
+    }
   }
 
   setupNewman() {
-    const bonds = eligibleNewmanBonds(this.state.graph);
+    const bonds = eligibleNewmanBonds(this.state.resolved.graph);
     const select = this.$("#newmanBond");
 
     select.innerHTML = bonds.map(function (bond, index) {
       return (
         '<option value="' + index + '">' +
-        esc(bondLabel(this.state.graph, bond)) +
+        esc(bondLabel(this.state.resolved.graph, bond)) +
         '</option>'
       );
     }, this).join("");
@@ -621,7 +1039,9 @@ class MiniOChem extends HTMLElement {
   }
 
   renderNewman() {
-    const bonds = eligibleNewmanBonds(this.state.graph || { bonds: [] });
+    if (!this.state.resolved) return;
+
+    const bonds = eligibleNewmanBonds(this.state.resolved.graph);
 
     if (!bonds.length) {
       this.$("#conformation").textContent =
@@ -629,14 +1049,11 @@ class MiniOChem extends HTMLElement {
       return;
     }
 
-    const index = Math.min(
-      this.state.newmanBondIndex,
-      bonds.length - 1
-    );
+    const index = Math.min(this.state.newmanBondIndex, bonds.length - 1);
 
     const result = renderNewmanSvg(
       this.$("#newmanSvg"),
-      this.state.graph,
+      this.state.resolved.graph,
       bonds[index],
       this.state.dihedral
     );
@@ -650,110 +1067,25 @@ class MiniOChem extends HTMLElement {
       '</span>';
   }
 
-  updateSymmetry() {
-    if (!this.threeView || !this.state.graph) return;
+  mountSymmetry() {
+    const stage = this.$("#stageSym");
+    this.symmetryView.mount(stage);
+    this.updateSymmetry();
 
-    this.threeView.setSymmetryMode(
+    const self = this;
+    requestAnimationFrame(function () {
+      self.symmetryView.resize(stage.clientWidth, stage.clientHeight || 620);
+    });
+  }
+
+  updateSymmetry() {
+    if (!this.symmetryView || !this.state.resolved) return;
+
+    this.symmetryView.setSymmetryMode(
       this.$("#symAxis").value,
       Number(this.$("#symAngle").value),
       this.$("#mirrorPlane").value
     );
-  }
-
-  renderHybridization() {
-    const graph = this.state.graph;
-
-    this.$("#hybridCards").innerHTML = graph.nodes.map(function (node) {
-      const hybrid = atomHybridization(graph, node.id);
-      const neighbors = graph.neighbors(node.id)
-        .map(function (item) {
-          return graph.nodes[item.id].el + (item.id + 1);
-        })
-        .join(", ");
-
-      return (
-        '<article class="atom-card">' +
-          '<div class="atom-index">' + esc(node.el + (node.id + 1)) + '</div>' +
-          '<div class="hybrid">' + esc(hybrid) + '</div>' +
-          '<div class="geometry">' + esc(localGeometry(hybrid)) + '</div>' +
-          '<div class="atom-detail">' +
-            (node.aromatic ? "aromatic · " : "") +
-            (node.hCount ? node.hCount + " H · " : "") +
-            (node.charge ? "formal charge " + node.charge + " · " : "") +
-            "neighbors: " + esc(neighbors || "none") +
-          '</div>' +
-        '</article>'
-      );
-    }).join("");
-  }
-
-  renderConformations() {
-    const bonds = eligibleNewmanBonds(this.state.graph);
-    const box = this.$("#rotatableList");
-
-    if (!bonds.length) {
-      box.innerHTML =
-        '<div class="empty">No simple sp³ C–C bond is available for Newman-style torsional analysis.</div>';
-      return;
-    }
-
-    box.innerHTML =
-      '<div class="list-intro">Bonds currently available for direct torsional / Newman analysis:</div>' +
-      bonds.map(function (bond, index) {
-        return (
-          '<button type="button" class="rotatable" data-newman-index="' + index + '">' +
-            '<span>' + esc(bondLabel(this.state.graph, bond)) + '</span>' +
-            '<small>rotate about σ bond →</small>' +
-          '</button>'
-        );
-      }, this).join("");
-  }
-
-  setView(view) {
-    const allowed = [
-      "lewis",
-      "skeletal",
-      "3d",
-      "newman",
-      "symmetry",
-      "hybridization",
-      "conformations"
-    ];
-
-    const normalized = allowed.includes(view) ? view : "lewis";
-    this.state.currentView = normalized;
-
-    this.$$(".tab").forEach(function (tab) {
-      tab.classList.toggle(
-        "active",
-        tab.dataset.view === normalized
-      );
-    });
-
-    this.$$(".panel").forEach(function (panel) {
-      panel.classList.toggle(
-        "active",
-        panel.dataset.panel === normalized
-      );
-    });
-
-    if (this.state.graph && normalized === "3d") {
-      this.mountThree(this.$("#stage3d"), false);
-    }
-
-    if (this.state.graph && normalized === "symmetry") {
-      this.mountThree(this.$("#stageSym"), true);
-    }
-
-    if (this.getAttribute("view") !== normalized) {
-      this.setAttribute("view", normalized);
-    }
-
-    this.dispatchEvent(new CustomEvent("viewchange", {
-      detail: { view: normalized },
-      bubbles: true,
-      composed: true
-    }));
   }
 
   setMolecule(value) {
