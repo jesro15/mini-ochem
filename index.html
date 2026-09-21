@@ -36,7 +36,7 @@
       url.searchParams.delete("formula");
       url.searchParams.delete("molecule");
       url.searchParams.set("q", event.detail.query);
-      url.searchParams.set("view", app.getAttribute("view") || "lewis");
+      url.searchParams.set("view", app.getAttribute("view") || "skeletal");
       history.replaceState(null, "", url);
     });
 
