@@ -402,7 +402,7 @@ function build2DPositions(molecule, graph) {
   });
 }
 
-function renderSkeletalSvg(svg, molecule, result) {
+function renderSkeletalSvg(svg, molecule, result, overlays) {
   const graph = result.graph;
   const positions = build2DPositions(molecule, graph);
   const parts = [];
@@ -445,6 +445,80 @@ function renderSkeletalSvg(svg, molecule, result) {
       parts.push(
         '<text class="atom-label" x="' + p.x + '" y="' + (p.y + 6) +
         '" text-anchor="middle">' + esc(atomText(node)) + '</text>'
+      );
+    }
+  });
+
+  graph.bonds.forEach(function (bond) {
+    const a = positions[bond.a];
+    const b = positions[bond.b];
+
+    parts.push(
+      '<line class="bond-hit" data-bond-id="' + bond.id +
+      '" x1="' + a.x + '" y1="' + a.y +
+      '" x2="' + b.x + '" y2="' + b.y + '"/>'
+    );
+  });
+
+  const activeOverlays = overlays || {};
+
+  if (activeOverlays.lengths) {
+    graph.bonds.forEach(function (bond) {
+      const a = positions[bond.a];
+      const b = positions[bond.b];
+      const metric = bondMetric(result, bond);
+      const x = (a.x + b.x) / 2;
+      const y = (a.y + b.y) / 2 - 14;
+      const label = metric.value.toFixed(3) + " Å";
+
+      parts.push(
+        '<g class="metric-overlay bond-metric">' +
+          '<rect x="' + (x - 31) + '" y="' + (y - 13) +
+          '" width="62" height="22" rx="7"/>' +
+          '<text x="' + x + '" y="' + (y + 3) +
+          '" text-anchor="middle">' + esc(label) + '</text>' +
+        '</g>'
+      );
+    });
+  }
+
+  graph.nodes.forEach(function (node) {
+    const p = positions[node.id];
+    const labels = [];
+
+    if (activeOverlays.hybridization) {
+      labels.push(atomHybridization(graph, node.id));
+    }
+
+    if (activeOverlays.angles) {
+      const metrics = angleMetrics(result, node.id);
+      if (metrics.rows.length) {
+        const values = metrics.rows
+          .map(function (row) { return row.value; })
+          .filter(Number.isFinite);
+
+        if (values.length) {
+          const mean =
+            values.reduce(function (sum, value) { return sum + value; }, 0) /
+            values.length;
+          labels.push("∠ " + mean.toFixed(1) + "°");
+        }
+      }
+    }
+
+    if (labels.length) {
+      const text = labels.join(" · ");
+      const width = Math.max(48, 10 + text.length * 7.2);
+      const x = p.x;
+      const y = p.y + 48;
+
+      parts.push(
+        '<g class="metric-overlay atom-metric">' +
+          '<rect x="' + (x - width / 2) + '" y="' + (y - 14) +
+          '" width="' + width + '" height="24" rx="8"/>' +
+          '<text x="' + x + '" y="' + (y + 3) +
+          '" text-anchor="middle">' + esc(text) + '</text>' +
+        '</g>'
       );
     }
   });
@@ -667,7 +741,11 @@ class MiniOChem extends HTMLElement {
     this.$("[data-overlay]").forEach(function (input) {
       input.addEventListener("change", function () {
         self.state.overlays[input.dataset.overlay] = input.checked;
+        self.renderPrimary();
+        self.updateThreeOverlays();
+
         if (self.state.selection) {
+          self.updateSelectionVisuals();
           self.renderSelectionCard();
         } else {
           self.hideHover(true);
@@ -887,6 +965,7 @@ class MiniOChem extends HTMLElement {
     this.ensureThreeViews();
     this.threeView.setGraph(result.graph, result.geometry);
     this.symmetryView.setGraph(result.graph, result.geometry);
+    this.updateThreeOverlays();
 
     this.setView(this.state.view);
 
@@ -936,8 +1015,11 @@ class MiniOChem extends HTMLElement {
     renderSkeletalSvg(
       this.$("#skeletalSvg"),
       this.state.resolved.molecule,
-      this.state.resolved
+      this.state.resolved,
+      this.state.overlays
     );
+
+    this.updateSelectionVisuals();
   }
 
   ensureThreeViews() {
@@ -998,6 +1080,11 @@ class MiniOChem extends HTMLElement {
     }
   }
 
+  updateThreeOverlays() {
+    if (!this.threeView) return;
+    this.threeView.setOverlays(this.state.overlays);
+  }
+
   resizeThreeViews() {
     if (this.threeView && this.state.view === "3d") {
       const stage = this.$("#stage3d");
@@ -1027,6 +1114,7 @@ class MiniOChem extends HTMLElement {
       const stage = this.$("#stage3d");
       this.threeView.mount(stage);
       this.threeView.setNormalMode();
+      this.updateThreeOverlays();
       this.threeView.setSelection(this.state.selection);
 
       const self = this;
