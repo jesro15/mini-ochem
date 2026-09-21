@@ -71,7 +71,7 @@ export function cleanFormula(value) {
 
 function readAtom(str, pos) {
   const match = str.slice(pos).match(/^(Cl|Br|[CNOSPFI])/);
-  if (!match) throw new Error(\`Expected an atom at “\${str.slice(pos)}”.\`);
+  if (!match) throw new Error(`Expected an atom at “${str.slice(pos)}”.`);
 
   const el = match[1];
   let index = pos + el.length;
@@ -279,7 +279,7 @@ function atomSMILES(node) {
     const hydrogens = node.hCount
       ? "H" + (node.hCount > 1 ? node.hCount : "")
       : "";
-    return \`[\${node.el}\${hydrogens}\${node.charge > 0 ? "+" : "-"}]\`;
+    return `[${node.el}${hydrogens}${node.charge > 0 ? "+" : "-"}]`;
   }
   return node.el;
 }
@@ -309,7 +309,7 @@ export function graphToSmiles(graph) {
 
     for (let index = 1; index < next.length; index += 1) {
       const branch = next[index];
-      output += \`(\${bondSymbol(branch.order)}\${walk(branch.id, id)})\`;
+      output += `(${bondSymbol(branch.order)}${walk(branch.id, id)})`;
     }
 
     output += bondSymbol(main.order) + walk(main.id, id);
@@ -367,7 +367,7 @@ export function functionalSentence(group) {
 
 export function atomDisplay(node, includeIndex = false) {
   const h = node.hCount ? "H" + (node.hCount > 1 ? node.hCount : "") : "";
-  return \`\${node.el}\${h}\${includeIndex ? " · " + (node.id + 1) : ""}\`;
+  return `${node.el}${h}${includeIndex ? " · " + (node.id + 1) : ""}`;
 }
 
 export function eligibleNewmanBonds(graph) {
@@ -402,7 +402,7 @@ function compactNeighborLabel(graph, nodeId, centerId) {
   if (node.el === "O") return node.hCount ? "OH" : "O…";
   if (node.el === "N") {
     const hydrogens = node.hCount ? "H" + (node.hCount > 1 ? node.hCount : "") : "";
-    return \`N\${hydrogens}…\`;
+    return `N${hydrogens}…`;
   }
 
   return node.el;
@@ -479,7 +479,7 @@ export function newmanConformation(graph, bond, dihedralDegrees) {
 export function bondLabel(graph, bond) {
   const a = graph.nodes[bond.a];
   const b = graph.nodes[bond.b];
-  return \`\${a.el}\${a.id + 1}–\${b.el}\${b.id + 1}\`;
+  return `${a.el}${a.id + 1}–${b.el}${b.id + 1}`;
 }
 
 export function expandWithHydrogens(graph) {
