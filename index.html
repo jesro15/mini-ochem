@@ -3,137 +3,40 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>MiniOChem — visual organic chemistry</title>
-  <meta name="description" content="A small browser-native organic chemistry teaching tool for 2D structures, 3D geometry, Newman projections, and symmetry.">
+  <title>MiniOChem</title>
+  <meta name="description" content="Interactive organic chemistry structure visualizer.">
   <style>
-    :root {
-      color-scheme: light;
-      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #f4f0e8;
-      color: #171714;
-    }
-    * { box-sizing: border-box; }
-    body {
+    html, body {
       margin: 0;
-      min-height: 100vh;
-      background:
-        radial-gradient(circle at 15% 0%, rgba(255,255,255,.96), transparent 32%),
-        linear-gradient(180deg, #f7f3eb, #f0ebe1);
-    }
-    main {
-      width: min(1180px, calc(100% - 32px));
-      margin: 0 auto;
-      padding: 42px 0 72px;
-    }
-    header {
-      display: grid;
-      grid-template-columns: minmax(0,1fr) minmax(260px,.38fr);
-      gap: 30px;
-      align-items: end;
-      margin-bottom: 28px;
-    }
-    .kicker {
-      font-size: 11px;
-      letter-spacing: .17em;
-      text-transform: uppercase;
-      font-weight: 800;
-      color: #706d65;
-      margin-bottom: 14px;
-    }
-    h1 {
-      margin: 0;
-      max-width: 860px;
-      font: 500 clamp(46px, 7vw, 88px)/.94 Georgia, "Times New Roman", serif;
-      letter-spacing: -.045em;
-    }
-    .intro {
-      margin: 0;
-      color: #706d65;
-      font-size: 14px;
-      line-height: 1.6;
-    }
-    .examples {
-      display: flex;
-      gap: 7px;
-      flex-wrap: wrap;
-      margin: 0 0 18px;
-    }
-    .examples button {
-      border: 1px solid #d9d2c5;
-      background: rgba(255,255,255,.55);
-      border-radius: 999px;
-      padding: 7px 10px;
-      color: #706d65;
-      cursor: pointer;
-      font: 11px "SFMono-Regular", Consolas, monospace;
-    }
-    .examples button:hover { color: #171714; border-color:#a9a195; }
-    footer {
-      color: #706d65;
-      font-size: 12px;
-      line-height: 1.55;
-      margin: 20px 4px 0;
-    }
-    code {
-      font-family: "SFMono-Regular", Consolas, monospace;
-      color: #171714;
-    }
-    @media (max-width: 800px) {
-      header { grid-template-columns: 1fr; align-items:start; }
+      min-height: 100%;
+      background: #fffdf8;
     }
   </style>
 </head>
 <body>
-  <main>
-    <header>
-      <div>
-        <div class="kicker">MiniOChem · graph → representation</div>
-        <h1>See the same molecule four ways.</h1>
-      </div>
-      <p class="intro">
-        Parse condensed formulas into one molecular graph, then move between electron bookkeeping,
-        conventional 2D depiction, idealized 3D geometry, Newman projections, and symmetry operations.
-      </p>
-    </header>
-
-    <div class="examples">
-      <button data-formula="(CH3CH2CH2)2NH" data-view="build">dipropylamine</button>
-      <button data-formula="CH3CH2CH2CH2OCH2CH3" data-view="3d">ether · 3D</button>
-      <button data-formula="CH3CH2CH2CH3" data-view="newman">butane · Newman</button>
-      <button data-formula="CH3CH(CH3)CH3" data-view="symmetry">isobutane · symmetry</button>
-      <button data-formula="CH2=CHCH3" data-view="3d">propene · sp²</button>
-    </div>
-
-    <mini-ochem id="ochem" formula="(CH3CH2CH2)2NH" view="build"></mini-ochem>
-
-    <footer>
-      Deep-link a representation with
-      <code>?formula=CH3CH2CH2CH3&amp;view=newman</code>.
-      The 3D view uses idealized local VSEPR/hybridization geometry for teaching; it is not a force-field-minimized conformer.
-    </footer>
-  </main>
+  <mini-ochem id="ochem"></mini-ochem>
 
   <script type="module" src="./miniochem.js"></script>
   <script type="module">
     const app = document.querySelector("#ochem");
     const params = new URLSearchParams(location.search);
-    const formula = params.get("formula");
+
+    const query =
+      params.get("q") ||
+      params.get("molecule") ||
+      params.get("formula");
+
     const view = params.get("view");
 
-    if (formula) app.setAttribute("formula", formula);
+    if (query) app.setAttribute("molecule", query);
     if (view) app.setAttribute("view", view);
-
-    document.querySelector(".examples").addEventListener("click", (event) => {
-      const button = event.target.closest("[data-formula]");
-      if (!button) return;
-      app.setFormula(button.dataset.formula);
-      app.setView(button.dataset.view || "build");
-    });
 
     app.addEventListener("moleculechange", (event) => {
       const url = new URL(location.href);
-      url.searchParams.set("formula", event.detail.condensed);
-      url.searchParams.set("view", app.getAttribute("view") || "build");
+      url.searchParams.delete("formula");
+      url.searchParams.delete("molecule");
+      url.searchParams.set("q", event.detail.query);
+      url.searchParams.set("view", app.getAttribute("view") || "lewis");
       history.replaceState(null, "", url);
     });
 
