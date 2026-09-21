@@ -163,3 +163,28 @@ The component boundary is designed so later additions can use the same graph:
 - Custom SVG is used for Newman projections and Lewis/connectivity teaching graphics.
 
 This keeps the app small while leaving room for deeper OChem visualization later.
+
+
+## GitHub Pages: one-time repository setting
+
+The normal GitHub repository page only displays source files; it does **not** execute `index.html`.
+
+A Pages deployment workflow is already included at:
+
+```text
+.github/workflows/pages.yml
+```
+
+For the live app, enable Pages once in the repository UI:
+
+1. Open **Settings → Pages**.
+2. Under **Build and deployment**, set **Source** to **GitHub Actions**.
+3. Then run **Actions → Deploy MiniOChem to GitHub Pages → Run workflow**, or push another commit.
+
+The expected live URL is:
+
+```text
+https://jesro15.github.io/learn_sci/
+```
+
+Because this repository is private, GitHub Pages for it requires a GitHub plan that supports Pages on private repositories. If the Pages setting is unavailable, either make a separate public deployment repository or use the local/Codex workflow below.
