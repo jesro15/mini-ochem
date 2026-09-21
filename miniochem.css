@@ -1091,3 +1091,33 @@ select {
     height: 128px;
   }
 }
+
+
+.metric-overlay {
+  pointer-events: none;
+}
+
+.metric-overlay rect {
+  fill: rgba(255, 253, 248, 0.96);
+  stroke: rgba(23, 23, 20, 0.16);
+  stroke-width: 1.2;
+}
+
+.metric-overlay text {
+  fill: #2b2925;
+  font: 600 13px "SFMono-Regular", Consolas, ui-monospace, monospace;
+}
+
+.atom-metric text {
+  fill: #8a3f31;
+}
+
+@media (max-width: 780px) {
+  .metric-overlay text {
+    font-size: 15px;
+  }
+
+  .bond-metric rect {
+    transform-box: fill-box;
+  }
+}
