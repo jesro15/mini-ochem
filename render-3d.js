@@ -218,29 +218,43 @@ function cylinder(start, end, radius, material) {
 
 function labelSprite(text) {
   const canvas = document.createElement("canvas");
-  canvas.width = 180;
-  canvas.height = 70;
+  canvas.width = 360;
+  canvas.height = 86;
   const ctx = canvas.getContext("2d");
 
-  ctx.fillStyle = "rgba(255,253,248,.92)";
-  ctx.strokeStyle = "rgba(23,23,20,.20)";
+  ctx.fillStyle = "rgba(255,253,248,.94)";
+  ctx.strokeStyle = "rgba(23,23,20,.18)";
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.roundRect(8, 8, 164, 54, 14);
+  ctx.roundRect(8, 8, 344, 70, 16);
   ctx.fill();
   ctx.stroke();
 
   ctx.fillStyle = "#171714";
-  ctx.font = "600 25px ui-monospace, SFMono-Regular, Consolas, monospace";
+  ctx.font = "600 24px ui-monospace, SFMono-Regular, Consolas, monospace";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(text, 90, 36);
+  ctx.fillText(text, 180, 44);
 
   const texture = new THREE.CanvasTexture(canvas);
-  const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthTest: false
+  });
   const sprite = new THREE.Sprite(material);
-  sprite.scale.set(1.35, 0.52, 1);
+  sprite.scale.set(2.25, 0.54, 1);
+  sprite.renderOrder = 20;
   return sprite;
+}
+
+function angleBetween(a, center, b) {
+  const va = a.clone().sub(center);
+  const vb = b.clone().sub(center);
+  const denom = va.length() * vb.length();
+  if (!denom) return null;
+  const cosine = THREE.MathUtils.clamp(va.dot(vb) / denom, -1, 1);
+  return THREE.MathUtils.radToDeg(Math.acos(cosine));
 }
 
 function moleculeGroup(graph, geometry) {
@@ -355,6 +369,9 @@ export class Molecule3DView {
 
     this.molecule = null;
     this.ghost = null;
+    this.overlayGroup = new THREE.Group();
+    this.scene.add(this.overlayGroup);
+    this.graph = null;
     this.positions = null;
     this.expanded = null;
     this.geometrySource = null;
@@ -515,6 +532,7 @@ export class Molecule3DView {
     if (this.ghost) this.scene.remove(this.ghost);
 
     const built = moleculeGroup(graph, geometry);
+    this.graph = graph;
     this.molecule = built.group;
     this.positions = built.positions;
     this.expanded = built.expanded;
@@ -533,6 +551,87 @@ export class Molecule3DView {
     this.camera.position.set(distance * 0.72, distance * 0.54, distance);
     this.controls.target.set(0, 0, 0);
     this.controls.update();
+    this.setOverlays({});
+  }
+
+  clearOverlays() {
+    while (this.overlayGroup.children.length) {
+      const child = this.overlayGroup.children.pop();
+      if (child.material && child.material.map) {
+        child.material.map.dispose();
+      }
+      if (child.material) child.material.dispose();
+    }
+  }
+
+  setOverlays(overlays) {
+    this.clearOverlays();
+
+    if (!this.graph || !this.positions || !this.expanded) return;
+
+    const active = overlays || {};
+    const graph = this.graph;
+    const positions = this.positions;
+    const expanded = this.expanded;
+
+    if (active.hybridization || active.angles) {
+      graph.nodes.forEach(function (node) {
+        const center = positions.get(node.id);
+        if (!center) return;
+
+        const labels = [];
+
+        if (active.hybridization) {
+          labels.push(node.el + String(node.id + 1) + " " +
+            atomHybridization(graph, node.id));
+        }
+
+        if (active.angles) {
+          const around = neighbors(expanded, node.id)
+            .map(function (neighbor) {
+              return positions.get(neighbor.id);
+            })
+            .filter(Boolean);
+
+          const values = [];
+          for (let i = 0; i < around.length; i += 1) {
+            for (let j = i + 1; j < around.length; j += 1) {
+              const value = angleBetween(around[i], center, around[j]);
+              if (Number.isFinite(value)) values.push(value);
+            }
+          }
+
+          if (values.length) {
+            const mean =
+              values.reduce(function (sum, value) {
+                return sum + value;
+              }, 0) / values.length;
+            labels.push("∠ " + mean.toFixed(1) + "°");
+          }
+        }
+
+        if (labels.length) {
+          const sprite = labelSprite(labels.join(" · "));
+          sprite.position.copy(center).add(new THREE.Vector3(0, 0.62, 0));
+          this.overlayGroup.add(sprite);
+        }
+      }, this);
+    }
+
+    if (active.lengths) {
+      graph.bonds.forEach(function (bond) {
+        const a = positions.get(bond.a);
+        const b = positions.get(bond.b);
+        if (!a || !b) return;
+
+        const midpoint = a.clone().add(b).multiplyScalar(0.5);
+        const value = a.distanceTo(b);
+        const sprite = labelSprite(value.toFixed(3) + " Å");
+        sprite.scale.set(1.65, 0.46, 1);
+        sprite.position.copy(midpoint).add(new THREE.Vector3(0, 0.34, 0));
+        this.overlayGroup.add(sprite);
+      }, this);
+    }
   }
 
   mount(element) {
