@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 
 import {
   parseFormula,
@@ -68,6 +69,19 @@ function build(formula) {
   const result = build("CH3CH2CH2CH3");
   assert.equal(result.formula, "C4H10");
   assert.equal(eligibleNewmanBonds(result.graph).length, 3);
+}
+
+{
+  const uiSource = fs.readFileSync(
+    new URL("../miniochem.js", import.meta.url),
+    "utf8"
+  );
+
+  assert.equal(
+    /this\.\$\([^)]*\)\.forEach/.test(uiSource),
+    false,
+    "querySelector results must not be treated as collections"
+  );
 }
 
 console.log("MiniOChem core tests passed.");
