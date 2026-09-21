@@ -9,6 +9,7 @@ import {
 
 const PUBCHEM = "https://pubchem.ncbi.nlm.nih.gov/rest/pug";
 const PROPERTY_LIST = "Title,IUPACName,MolecularFormula,ConnectivitySMILES,InChI,InChIKey";
+const relatedCache = new Map();
 
 function clean(value) {
   return String(value || "").trim();
@@ -74,7 +75,7 @@ function cidList(payload) {
     : [];
 }
 
-async function propertiesForCids(cids) {
+export async function propertiesForCids(cids) {
   if (!cids.length) return [];
   const list = cids.slice(0, 12).join(",");
   const url =
@@ -433,6 +434,59 @@ export async function resolveMolecule(input) {
 
   const rows = await propertiesForCids([cids[0]]);
   return resolveCandidate(rows[0], query);
+}
+
+
+export async function getSameFormulaCandidates(formula, excludeCid) {
+  const key = "formula:" + String(formula || "").trim() + ":" + (excludeCid || "");
+  if (relatedCache.has(key)) return relatedCache.get(key);
+
+  const cids = await resolveCids(formula, "formula");
+  const filtered = cids.filter(function (cid) {
+    return !excludeCid || Number(cid) !== Number(excludeCid);
+  }).slice(0, 12);
+
+  const rows = await propertiesForCids(filtered);
+  relatedCache.set(key, rows);
+  return rows;
+}
+
+export async function getSimilarCompounds(cid, options) {
+  if (!cid) return [];
+
+  const threshold =
+    options && Number.isFinite(Number(options.threshold))
+      ? Math.max(0, Math.min(100, Number(options.threshold)))
+      : 90;
+
+  const maxRecords =
+    options && Number.isFinite(Number(options.maxRecords))
+      ? Math.max(1, Math.min(24, Number(options.maxRecords)))
+      : 12;
+
+  const key =
+    "similar:" + cid + ":" + threshold + ":" + maxRecords;
+
+  if (relatedCache.has(key)) return relatedCache.get(key);
+
+  const url =
+    PUBCHEM +
+    "/compound/fastsimilarity_2d/cid/" +
+    encodeURIComponent(cid) +
+    "/cids/JSON?Threshold=" +
+    encodeURIComponent(threshold) +
+    "&MaxRecords=" +
+    encodeURIComponent(maxRecords + 1);
+
+  const cids = cidList(await getJSON(url))
+    .filter(function (candidateCid) {
+      return Number(candidateCid) !== Number(cid);
+    })
+    .slice(0, maxRecords);
+
+  const rows = await propertiesForCids(cids);
+  relatedCache.set(key, rows);
+  return rows;
 }
 
 export { OCL };
