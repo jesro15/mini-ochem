@@ -138,12 +138,39 @@ async function resolveCids(value, kind) {
   return [];
 }
 
-function moleculeFromSmiles(smiles) {
-  const molecule = OCL.Molecule.fromSmiles(smiles);
+function prepareMolecule(molecule) {
   if (typeof molecule.ensureHelperArrays === "function") {
     molecule.ensureHelperArrays(OCL.Molecule.cHelperNeighbours);
   }
   return molecule;
+}
+
+function moleculeFromSmiles(smiles) {
+  return prepareMolecule(OCL.Molecule.fromSmiles(smiles));
+}
+
+function moleculeFromMolfile(molfile) {
+  return prepareMolecule(OCL.Molecule.fromMolfile(molfile));
+}
+
+async function fetchPubChem3D(cid) {
+  if (!cid) return null;
+
+  try {
+    const response = await fetch(
+      PUBCHEM + "/compound/cid/" + cid + "/SDF?record_type=3d"
+    );
+
+    if (!response.ok) return null;
+
+    const sdf = await response.text();
+    const molfile = sdf.split("$$")[0].trim();
+    if (!molfile) return null;
+
+    return moleculeFromMolfile(molfile);
+  } catch {
+    return null;
+  }
 }
 
 export function graphFromOCL(molecule) {
@@ -160,6 +187,7 @@ export function graphFromOCL(molecule) {
     );
 
     graph.nodes[id].charge = molecule.getAtomCharge(atom);
+    graph.nodes[id].sourceAtomIndex = atom;
     graph.nodes[id].aromatic =
       typeof molecule.isAromaticAtom === "function"
         ? molecule.isAromaticAtom(atom)
@@ -184,6 +212,55 @@ export function graphFromOCL(molecule) {
   return graph;
 }
 
+function geometryFromMolecule(molecule, graph, source) {
+  if (!molecule || !graph) return null;
+
+  const atomPositions = graph.nodes.map(function (node) {
+    const atom = node.sourceAtomIndex;
+    if (!Number.isInteger(atom)) return null;
+
+    const x = molecule.getAtomX(atom);
+    const y = molecule.getAtomY(atom);
+    const z = molecule.getAtomZ(atom);
+
+    if (![x, y, z].every(Number.isFinite)) return null;
+    return [x, y, z];
+  });
+
+  if (atomPositions.some(function (point) { return !point; })) return null;
+
+  const hydrogenPositions = graph.nodes.map(function (node) {
+    const attached = [];
+    const center = node.sourceAtomIndex;
+
+    for (let bond = 0; bond < molecule.getAllBonds(); bond += 1) {
+      const a = molecule.getBondAtom(0, bond);
+      const b = molecule.getBondAtom(1, bond);
+      let h = null;
+
+      if (a === center && molecule.getAtomicNo(b) === 1) h = b;
+      if (b === center && molecule.getAtomicNo(a) === 1) h = a;
+
+      if (h !== null) {
+        attached.push([
+          molecule.getAtomX(h),
+          molecule.getAtomY(h),
+          molecule.getAtomZ(h)
+        ]);
+      }
+    }
+
+    return attached;
+  });
+
+  return {
+    kind: "computed",
+    source: source || "PubChem 3D conformer",
+    atomPositions: atomPositions,
+    hydrogenPositions: hydrogenPositions
+  };
+}
+
 async function enrichSmiles(smiles) {
   try {
     const url =
@@ -206,6 +283,7 @@ function resolvedObject(options) {
     molecule: options.molecule,
     graph: options.graph,
     smiles: options.smiles,
+    geometry: options.geometry || null,
     metadata: {
       title: metadata.title || metadata.iupacName || options.query,
       iupacName: metadata.iupacName || "",
@@ -223,8 +301,14 @@ export async function resolveCandidate(candidate, originalQuery) {
     throw new Error("That PubChem result has no usable structure.");
   }
 
-  const molecule = moleculeFromSmiles(candidate.smiles);
-  const graph = graphFromOCL(molecule);
+  const molecule3d = await fetchPubChem3D(candidate.cid);
+  const sourceMolecule = molecule3d || moleculeFromSmiles(candidate.smiles);
+  const graph = graphFromOCL(sourceMolecule);
+  const geometry = molecule3d
+    ? geometryFromMolecule(molecule3d, graph, "PubChem computed 3D conformer")
+    : null;
+
+  const molecule = moleculeFromMolfile(sourceMolecule.toMolfile());
 
   return resolvedObject({
     query: originalQuery || candidate.title,
@@ -232,6 +316,7 @@ export async function resolveCandidate(candidate, originalQuery) {
     molecule: molecule,
     graph: graph,
     smiles: candidate.smiles,
+    geometry: geometry,
     metadata: candidate
   });
 }
@@ -250,6 +335,18 @@ export async function resolveMolecule(input) {
 
       if (validation.every(function (item) { return item.ok; })) {
         const smiles = graphToSmiles(parsed.graph);
+        const metadata = await enrichSmiles(smiles);
+
+        if (metadata && metadata.cid) {
+          return resolveCandidate(
+            Object.assign({}, metadata, {
+              molecularFormula:
+                metadata.molecularFormula || molecularFormula(parsed.graph)
+            }),
+            query
+          );
+        }
+
         const molecule = moleculeFromSmiles(smiles);
 
         return resolvedObject({
@@ -308,6 +405,11 @@ export async function resolveMolecule(input) {
 
     if (graph.nodes.length) {
       const metadata = await enrichSmiles(query);
+
+      if (metadata && metadata.cid) {
+        return resolveCandidate(metadata, query);
+      }
+
       return resolvedObject({
         query: query,
         inputType: "SMILES",
