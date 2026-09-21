@@ -571,3 +571,330 @@ select {
     border-top: 1px solid var(--line);
   }
 }
+
+
+/* Selection state shared by mouse and touch inspection. */
+.atom-hit.selected {
+  fill: rgba(199, 78, 56, 0.10);
+  stroke: rgba(199, 78, 56, 0.72);
+  stroke-width: 7;
+}
+
+.bond-hit.selected {
+  stroke: rgba(199, 78, 56, 0.48);
+  stroke-width: 18;
+}
+
+.hover-card.pinned {
+  left: auto;
+  top: auto;
+  right: 16px;
+  bottom: 16px;
+  width: min(300px, calc(100% - 32px));
+  max-height: 48%;
+  overflow: auto;
+  pointer-events: auto;
+}
+
+.inspect-close {
+  position: absolute;
+  top: 6px;
+  right: 7px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.inspect-close:active {
+  background: var(--soft);
+}
+
+#skeletalSvg {
+  touch-action: manipulation;
+}
+
+@media (hover: none), (pointer: coarse) {
+  button,
+  select,
+  .overlays label {
+    min-height: 44px;
+  }
+
+  .view-button {
+    min-height: 42px;
+    padding-inline: 16px;
+  }
+
+  .atom-hit {
+    cursor: pointer;
+  }
+
+  .bond-hit {
+    stroke-width: 34;
+    cursor: pointer;
+  }
+
+  .hover-card.pinned {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    width: auto;
+    max-height: 46%;
+    border-radius: 16px;
+    padding: 14px 46px 14px 14px;
+    box-shadow: 0 16px 44px rgba(36, 31, 23, 0.18);
+  }
+
+  .hover-card.pinned strong {
+    font-size: 14px;
+  }
+
+  .hover-card.pinned,
+  .hover-card.pinned div,
+  .hover-card.pinned small {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 780px) {
+  :host {
+    min-height: 100svh;
+  }
+
+  .shell {
+    width: 100%;
+    padding:
+      max(10px, env(safe-area-inset-top))
+      max(9px, env(safe-area-inset-right))
+      max(24px, env(safe-area-inset-bottom))
+      max(9px, env(safe-area-inset-left));
+  }
+
+  :host(:not([molecule])) .shell {
+    min-height: 100svh;
+    padding-top: max(12px, env(safe-area-inset-top));
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .query-form {
+    width: 100%;
+    margin-bottom: 10px;
+  }
+
+  .query {
+    min-height: 52px;
+    border-radius: 15px;
+    padding: 14px 15px;
+    font-size: 16px;
+  }
+
+  .status {
+    width: 100%;
+    min-width: 0;
+    margin-bottom: 8px;
+    gap: 7px;
+    padding-inline: 3px;
+  }
+
+  #identity {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  #source {
+    display: none;
+  }
+
+  #geometrySource {
+    display: none;
+  }
+
+  .workspace {
+    width: 100%;
+    border-radius: 18px;
+  }
+
+  .toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    gap: 9px;
+    padding: 9px;
+    background: rgba(250, 247, 241, 0.96);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .segmented {
+    width: 100%;
+  }
+
+  .view-button {
+    flex: 1 1 0;
+    text-align: center;
+  }
+
+  .overlays {
+    width: 100%;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 1px;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .overlays::-webkit-scrollbar,
+  .secondary-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .overlays label {
+    flex: 0 0 auto;
+    min-height: 40px;
+    padding: 8px 11px;
+    scroll-snap-align: start;
+    font-size: 11px;
+  }
+
+  .primary-stage {
+    min-height: clamp(390px, 58svh, 520px);
+    overscroll-behavior: contain;
+  }
+
+  .primary-panel,
+  #skeletalSvg,
+  .stage,
+  .stage canvas {
+    min-height: clamp(390px, 58svh, 520px);
+    height: clamp(390px, 58svh, 520px);
+  }
+
+  #skeletalSvg {
+    width: 100%;
+  }
+
+  .stage-help {
+    left: 10px;
+    bottom: 9px;
+    right: 10px;
+    font-size: 10px;
+    text-align: center;
+  }
+
+  .provenance {
+    padding: 8px 10px;
+    font-size: 9px;
+    line-height: 1.4;
+  }
+
+  .secondary-nav {
+    width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding: 8px 9px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .secondary-nav span {
+    display: none;
+  }
+
+  .secondary-nav button {
+    flex: 0 0 auto;
+    min-height: 40px;
+    padding: 8px 13px;
+    font-size: 11px;
+  }
+
+  .secondary-panel,
+  .newman-stage {
+    min-height: 430px;
+  }
+
+  #lewisSvg {
+    height: 460px;
+  }
+
+  .split {
+    min-height: 0;
+    grid-template-columns: 1fr;
+  }
+
+  .controls {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    padding: 15px 12px max(18px, env(safe-area-inset-bottom));
+    gap: 15px;
+  }
+
+  .controls select {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .range-row {
+    grid-template-columns: 1fr 52px;
+  }
+
+  .range-row input[type="range"] {
+    min-height: 38px;
+  }
+
+  .presets {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .presets button {
+    min-height: 42px;
+    padding: 8px 5px;
+  }
+
+  .candidate {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 54px;
+  }
+
+  .candidate small {
+    white-space: normal;
+  }
+
+  .error,
+  .candidates {
+    width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .primary-stage,
+  .primary-panel,
+  #skeletalSvg,
+  .stage,
+  .stage canvas {
+    min-height: clamp(360px, 54svh, 470px);
+    height: clamp(360px, 54svh, 470px);
+  }
+
+  .overlays label {
+    font-size: 10px;
+  }
+
+  .provenance {
+    max-height: 52px;
+    overflow: auto;
+  }
+}
