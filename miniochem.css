@@ -1121,3 +1121,18 @@ select {
     transform-box: fill-box;
   }
 }
+
+.edit-launch { margin: 8px 0 16px; }
+.editor-panel { padding: 12px; border: 1px solid #d9d4c8; border-radius: 14px; margin-bottom: 18px; background: white; }
+.editor-panel p { font-size: 14px; line-height: 1.5; }
+#moleculeEditor { width: 100%; height: 440px; min-width: 0; touch-action: none; color-scheme: light; }
+.editor-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.editor-actions button, .edit-launch button { min-height: 44px; padding: 10px 14px; cursor: pointer; }
+.smiles-label { display: grid; gap: 6px; margin-top: 12px; font-size: 14px; }
+#editSmiles { box-sizing: border-box; width: 100%; min-height: 44px; font: 16px monospace; }
+#applyStructure { background: #263f35; color: white; border-radius: 8px; }
+@media (max-width: 600px) {
+  .editor-panel { padding: 6px; }
+  #moleculeEditor { height: min(440px, 60dvh); min-height: 330px; }
+  .editor-actions button { flex: 1 1 140px; }
+}

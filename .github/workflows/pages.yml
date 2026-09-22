@@ -24,13 +24,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
       - name: Upload static site
         uses: actions/upload-pages-artifact@v4
         with:
-          path: .
+          path: dist
 
       - name: Deploy to GitHub Pages
         id: deployment

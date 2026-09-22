@@ -8,6 +8,7 @@ import {
 
 import {
   resolveMolecule,
+  graphFromOCL,
   resolveCandidate,
   getSameFormulaCandidates,
   getSimilarCompounds,
@@ -16,6 +17,8 @@ import {
 
 import { Molecule3DView } from "./render-3d.js";
 import { renderNewmanSvg } from "./render-newman.js";
+
+import { resolveStructure, validateStructure } from "./molecule-structure.js";
 
 const CSS_URL = new URL("./miniochem.css", import.meta.url).href;
 
@@ -26,6 +29,15 @@ const TEMPLATE = [
         'placeholder="ethanol · CH3CH2OH · CCO · InChI=… · 64-17-5 · CID 702">',
     '</form>',
 
+    '<div class="edit-launch"><button type="button" id="editStructure">Draw / edit structure</button></div>',
+    '<section class="editor-panel" hidden aria-label="Molecule editor">',
+      '<p>Draw bonds and branches for constitutional isomers. Use solid / hashed wedges for tetrahedral stereochemistry; arrange double-bond substituents for E/Z isomers.</p>',
+      '<div id="moleculeEditor"></div>',
+      '<label class="smiles-label">Isomeric SMILES<input id="editSmiles" spellcheck="false" placeholder="C[C@H](O)CC or C/C=C/C"></label>',
+      '<div class="editor-actions"><button type="button" id="importSmiles">Load SMILES into drawing</button>',
+      '<button type="button" id="applyStructure">Apply structure</button><button type="button" id="cancelStructure">Cancel</button></div>',
+      '<p id="editorStatus" role="status" aria-live="polite"></p>',
+    '</section>',
     '<div class="status" hidden>',
       '<span id="identity"></span>',
       '<span id="source"></span>',
@@ -397,13 +409,14 @@ function build2DPositions(molecule, graph) {
   return raw.map(function (p) {
     return {
       x: 500 + (p.x - centerX) * scale,
-      y: 310 - (p.y - centerY) * scale
+      y: 310 + (p.y - centerY) * scale
     };
   });
 }
 
 function renderSkeletalSvg(svg, molecule, result, overlays) {
-  const graph = result.graph;
+  molecule.removeExplicitHydrogens();
+  const graph = graphFromOCL(molecule);
   const positions = build2DPositions(molecule, graph);
   const parts = [];
 
@@ -417,6 +430,19 @@ function renderSkeletalSvg(svg, molecule, result, overlays) {
     const oy = (dx / length) * 6;
     const order = Math.max(1, Math.min(3, Math.round(bond.order)));
 
+    const stereoType = Number.isInteger(bond.sourceBondIndex) ? molecule.getBondType(bond.sourceBondIndex) : 0;
+    if (stereoType === OCL.Molecule.cBondTypeUp) {
+      parts.push('<polygon fill="#24231f" points="' + a.x + ',' + a.y + ' ' + (b.x + ox) + ',' + (b.y + oy) + ' ' + (b.x - ox) + ',' + (b.y - oy) + '"/>');
+      return;
+    }
+    if (stereoType === OCL.Molecule.cBondTypeDown) {
+      for (let n = 1; n <= 7; n++) {
+        const t = n / 8;
+        const x = a.x + dx * t, y = a.y + dy * t;
+        parts.push('<line class="bond-line" x1="' + (x - ox * t) + '" y1="' + (y - oy * t) + '" x2="' + (x + ox * t) + '" y2="' + (y + oy * t) + '"/>');
+      }
+      return;
+    }
     for (let i = 0; i < order; i += 1) {
       const shift = i - (order - 1) / 2;
       parts.push(
@@ -484,7 +510,7 @@ function renderSkeletalSvg(svg, molecule, result, overlays) {
 
   graph.nodes.forEach(function (node) {
     const p = positions[node.id];
-    const labels = [];
+    const labels = node.cip ? [node.cip] : [];
 
     if (activeOverlays.hybridization) {
       labels.push(atomHybridization(graph, node.id));
@@ -673,6 +699,8 @@ class MiniOChem extends HTMLElement {
     this.symmetryView = null;
     this.resizeObserver = null;
     this.pendingCandidates = null;
+    this.requestVersion = 0;
+    this.editor = null;
     this.coarsePointer = window.matchMedia(
       "(hover: none), (pointer: coarse)"
     ).matches;
@@ -698,6 +726,7 @@ class MiniOChem extends HTMLElement {
   }
 
   disconnectedCallback() {
+    if (this.editor) { this.editor.destroy(); this.editor = null; }
     if (this.resizeObserver) this.resizeObserver.disconnect();
     if (this.threeView) this.threeView.dispose();
     if (this.symmetryView) this.symmetryView.dispose();
@@ -708,7 +737,7 @@ class MiniOChem extends HTMLElement {
 
     if ((name === "molecule" || name === "formula") && newValue) {
       this.$(".query").value = newValue;
-      this.resolve(newValue);
+      if (this.state.resolved?.query !== newValue) this.resolve(newValue);
     }
 
     if (name === "view" && (newValue === "3d" || newValue === "skeletal")) {
@@ -724,7 +753,64 @@ class MiniOChem extends HTMLElement {
     return Array.from(this.shadowRoot.querySelectorAll(selector));
   }
 
+  openEditor() {
+    ++this.requestVersion;
+    this.$(".editor-panel").hidden = false;
+    if (!this.editor) {
+      this.editor = new OCL.CanvasEditor(this.$("#moleculeEditor"));
+      this.editor.setOnChangeListener((event) => {
+        if (event.type === "molecule" && event.isUserEvent && this.shadowRoot.activeElement !== this.$("#editSmiles")) {
+          try { this.$("#editSmiles").value = this.editor.getMolecule().toIsomericSmiles(); } catch {}
+        }
+      });
+    }
+    const draft = this.state.resolved?.molecule.getCompactCopy() || new OCL.Molecule(0, 0);
+    draft.removeExplicitHydrogens();
+    draft.inventCoordinates();
+    this.editor.setMolecule(draft);
+    this.$("#editSmiles").value = draft.toIsomericSmiles();
+    this.$("#editorStatus").textContent = "Changes stay in the drawing until you apply them. Undo and redo are in the drawing toolbar.";
+    this.$("#moleculeEditor").scrollIntoView({ block: "nearest" });
+  }
+
+  closeEditor() {
+    this.$(".editor-panel").hidden = true;
+  }
+
+  async applyStructure() {
+    const version = ++this.requestVersion;
+    const button = this.$("#applyStructure");
+    button.disabled = true;
+    this.$("#moleculeEditor").inert = true;
+    this.$("#editSmiles").readOnly = true;
+    this.$("#importSmiles").disabled = true;
+    this.$("#editorStatus").textContent = "Building views and a stereo-aware 3D conformer…";
+    try {
+      const result = await resolveStructure(this.editor.getMolecule().getCompactCopy());
+      if (version !== this.requestVersion) return;
+      this.applyResolved(result);
+    } catch (error) {
+      if (version === this.requestVersion) this.$("#editorStatus").textContent = error.message;
+    } finally {
+      button.disabled = false;
+      this.$("#moleculeEditor").inert = false;
+      this.$("#editSmiles").readOnly = false;
+      this.$("#importSmiles").disabled = false;
+    }
+  }
+
   bindUI() {
+    this.$("#editStructure").addEventListener("click", () => this.openEditor());
+    this.$("#cancelStructure").addEventListener("click", () => { ++this.requestVersion; this.closeEditor(); });
+    this.$("#applyStructure").addEventListener("click", () => this.applyStructure());
+    this.$("#importSmiles").addEventListener("click", () => {
+      try {
+        const molecule = OCL.Molecule.fromSmiles(this.$("#editSmiles").value);
+        validateStructure(molecule);
+        this.editor.setMolecule(molecule);
+        this.$("#editorStatus").textContent = "SMILES loaded. Review the drawing, then apply.";
+      } catch (error) { this.$("#editorStatus").textContent = "Could not load SMILES: " + error.message; }
+    });
     const self = this;
 
     this.$(".query-form").addEventListener("submit", function (event) {
@@ -874,12 +960,14 @@ class MiniOChem extends HTMLElement {
   }
 
   async resolve(value) {
+    const version = ++this.requestVersion;
     this.$(".error").hidden = true;
     this.$(".candidates").hidden = true;
     this.$(".query").classList.add("loading");
 
     try {
       const result = await resolveMolecule(value);
+      if (version !== this.requestVersion) return;
 
       if (result.ambiguous) {
         this.pendingCandidates = result.candidates;
@@ -887,6 +975,7 @@ class MiniOChem extends HTMLElement {
         return;
       }
 
+      if (version !== this.requestVersion) return;
       this.applyResolved(result);
     } catch (error) {
       this.$(".error").textContent =
@@ -898,6 +987,7 @@ class MiniOChem extends HTMLElement {
   }
 
   async chooseCandidate(candidate) {
+    const version = ++this.requestVersion;
     this.$(".query").classList.add("loading");
 
     try {
@@ -905,6 +995,7 @@ class MiniOChem extends HTMLElement {
         candidate,
         this.$(".query").value
       );
+      if (version !== this.requestVersion) return;
       this.applyResolved(result);
     } catch (error) {
       this.$(".error").textContent =
@@ -945,6 +1036,9 @@ class MiniOChem extends HTMLElement {
   }
 
   applyResolved(result) {
+    this.closeEditor();
+    this.$(".query").value = result.query;
+    this.$(".hover-card").hidden = true;
     this.state.resolved = result;
     this.state.newmanBondIndex = 0;
     this.state.selection = null;
@@ -1006,15 +1100,15 @@ class MiniOChem extends HTMLElement {
 
     this.$(".provenance").textContent = result.geometry
       ? "Geometry values are calculated from " + result.geometry.source +
-        ". This is molecule-specific computed geometry, not an experimental literature measurement."
-      : "No molecule-specific 3D conformer was available; geometry falls back to idealized hybridization angles and reference bond lengths.";
+        ". These are computed, not experimental measurements. Unspecified stereochemistry remains unspecified; 3D shows one possible arrangement."
+      : "No molecule-specific 3D conformer was available. The 3D and symmetry views use idealized geometry and may not represent stereochemistry; bond lengths and angles are reference estimates.";
   }
 
   renderPrimary() {
     if (!this.state.resolved) return;
     renderSkeletalSvg(
       this.$("#skeletalSvg"),
-      this.state.resolved.molecule,
+      this.state.resolved.molecule.getCompactCopy(),
       this.state.resolved,
       this.state.overlays
     );
@@ -1368,6 +1462,7 @@ class MiniOChem extends HTMLElement {
         this.state.relatedCache[key] = rows;
       }
 
+      if (this.state.resolved !== result || this.state.relatedMode !== mode) return;
       this.state.relatedItems = rows;
 
       if (!rows.length) {
@@ -1395,6 +1490,7 @@ class MiniOChem extends HTMLElement {
   }
 
   async chooseRelated(candidate) {
+    const version = ++this.requestVersion;
     this.$(".query").classList.add("loading");
 
     try {
@@ -1406,6 +1502,7 @@ class MiniOChem extends HTMLElement {
       this.$(".query").value =
         candidate.title || candidate.iupacName || ("CID " + candidate.cid);
 
+      if (version !== this.requestVersion) return;
       this.applyResolved(result);
     } catch (error) {
       this.$(".error").textContent =
@@ -1469,7 +1566,8 @@ class MiniOChem extends HTMLElement {
       this.$("#newmanSvg"),
       this.state.resolved.graph,
       bonds[index],
-      this.state.dihedral
+      this.state.dihedral,
+      this.state.resolved.geometry
     );
 
     this.$("#conformation").innerHTML =
@@ -1478,7 +1576,7 @@ class MiniOChem extends HTMLElement {
       esc(result.front.map(function (item) { return item.label; }).join(", ")) +
       '<br>back: ' +
       esc(result.back.map(function (item) { return item.label; }).join(", ")) +
-      '</span>';
+      '</span><br><span>Bond rotation model: the slider rotates the back group independently of the 3D conformer.</span>';
   }
 
   mountSymmetry() {

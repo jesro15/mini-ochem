@@ -1,190 +1,60 @@
 # MiniOChem
 
-A small browser-native organic chemistry teaching app that keeps one molecular graph and renders it in multiple representations.
+[Open MiniOChem](https://jesro15.github.io/mini-ochem/)
 
-## Current views
+An organic chemistry teaching app with an editable molecular structure shared by skeletal, 3D, Lewis, Newman, symmetry, hybridization, bond-length, and bond-angle views.
 
-- **Build / Lewis** — parse condensed notation, check valence, infer introductory hybridization, show lone pairs/connectivity, and render a conventional 2D structure.
-- **3D geometry** — expand implicit hydrogens and build an idealized local VSEPR/hybridization model that can be rotated freely.
-- **Newman projection** — choose an eligible sp3 C-C single bond and rotate the back carbon through a full 360 degree dihedral.
-- **Symmetry explorer** — overlay x/y/z axes, rotate the molecule against a fixed ghost reference, and display xy/xz/yz mirror planes.
+## Draw and choose isomers
 
-The 3D model is intentionally labeled as **idealized educational geometry**, not an energy-minimized conformer.
+1. Search by name, condensed formula, SMILES, InChI, InChIKey, CAS number, or PubChem CID. Molecular formulas show a candidate chooser when ambiguous.
+2. Select **Draw / edit structure**, or start drawing without searching.
+3. Change bonds, atoms, rings, or branches for constitutional isomers. Use the editor's solid/hashed wedge tools for tetrahedral stereo and double-bond substituent arrangement for E/Z stereo. The native toolbar includes undo.
+4. Optionally enter **Isomeric SMILES** and select **Load SMILES into drawing**. For example, compare `C[C@H](O)CC` with `C[C@@H](O)CC`, or `C/C=C/C` with `C/C=C\C`.
+5. Select **Apply structure** to update all views. **Cancel** leaves the applied molecule unchanged. Edits clear the previous compound's name/CID and computed coordinates.
 
-## Architecture
+Custom structures are shared in the URL as explicit `SMILES:` queries, retaining stereochemistry and avoiding ambiguous formula/name lookups. Search and related compounds still use PubChem; drawing and applying custom structures work without PubChem.
 
-```text
-condensed formula
-      |
-      v
-chem-core.js
-  parser -> molecular graph -> valence / hybridization / functional group
-      |
-      +--> OpenChemLib -> conventional 2D SVG
-      |
-      +--> render-3d.js -> idealized 3D atoms + bonds -> Three.js
-      |
-      +--> render-newman.js -> bond-axis projection
-      |
-      +--> MiniOChem Web Component
-```
+On phones the editor and controls fit the viewport, support pointer/touch drawing, and provide a text alternative for precise stereochemical input. The chemistry editor's native icon toolbar is denser than the surrounding touch controls.
 
-Files:
+## Editor choice
 
-- `chem-core.js` — reusable chemistry graph/parser logic; no browser rendering dependency.
-- `render-3d.js` — idealized 3D geometry and Three.js scene.
-- `render-newman.js` — Newman projection SVG renderer.
-- `miniochem.js` — reusable `<mini-ochem>` Web Component.
-- `miniochem.css` — component presentation.
-- `index.html` — demo shell only.
-- `tests/core.test.mjs` — zero-dependency parser/core smoke tests.
+We evaluated [Ketcher](https://github.com/epam/ketcher) and [OpenChemLib CanvasEditor](https://cheminfo.github.io/openchemlib-js/classes/CanvasEditor.html). Ketcher offers a broader editing UI, but its standalone React/Indigo stack would add another chemistry engine and integration layer. OpenChemLib 9.25.0 is already the app's chemistry engine and includes CanvasEditor, isomeric SMILES, stereo-aware 2D coordinate invention, and [stereo-aware conformer generation](https://cheminfo.github.io/openchemlib-js/classes/ConformerGenerator.html). It therefore fits this small teaching app better. It is pinned and bundled, along with Three.js, rather than fetched from an ESM CDN at runtime.
 
-The separation is deliberate: **chemistry truth lives in the graph; visual storytelling lives in renderers.**
+## Structure and derived views
 
-## Run in Codex or locally
+- `molecule-structure.js`: OCL molecule is the source of truth; derived graph, CIP labels, isomeric SMILES, geometry, and atom mappings are built together. Display code works on copies.
+- `structure-worker.js`: generates a computed conformer from a V3000 molfile copy, with a 15-second limit. Generation preserves specified R/S and E/Z and runs off the UI thread.
+- `molecule-resolver.js`: handles identifiers and PubChem. Requests stereo-bearing SMILES; accepts a PubChem conformer only when its stereo-aware identity matches the selected structure.
+- `miniochem.js`: draft/apply/cancel workflow, skeletal wedge/hash bonds and CIP labels, teaching overlays, touch selection, related structures, and secondary views.
+- `render-3d.js`: displays the current derived geometry in both 3D and symmetry views.
+- `render-newman.js`: takes substituent ordering from the current conformer's coordinates so stereocenters are not reordered arbitrarily.
+- `chem-core.js`: condensed formula parser, graph helpers, introductory chemistry rules.
 
-Clone/open the repo and run:
+Geometry is computed, not experimental literature data. If conformer generation fails or times out, existing idealized geometry remains available and is explicitly labeled as potentially unsuitable for stereochemistry. Unspecified stereochemistry remains unspecified; a computed conformer shows one possible arrangement.
 
-```bash
+The Newman slider rotates the back group in a bond-rotation teaching model; it does not change the 3D conformer. Symmetry is an operation explorer, not an automatic point-group assignment. Hybridization and Lewis lone-pair rules remain introductory approximations. Editing currently accepts one connected, non-query molecule with at most 80 atoms. This is not a reaction editor, conformer energy search, or full stereoisomer enumerator.
+
+## Development and tests
+
+Node 22.12+ is required by the build tools.
+
+```sh
+npm ci
+npm run dev
 npm test
-npm run serve
+npx playwright install chromium
+npm run test:browser
+npm run build
 ```
 
-Then open:
+The dev server prints its local URL. Browser tests build the production site and start a preview on port 4173. They cover desktop and emulated phone workflows, including direct canvas drawing, R/S and E/Z edits, constitutional isomers, invalid/empty drafts, cancellation, share-link reload, overlays, 3D, Newman, and symmetry. Chemistry tests check isomer identity through molfile/SMILES/conformer roundtrips and the spatial E/Z arrangement.
 
-```text
-http://localhost:8000
+To test a deployed build:
+
+```sh
+TEST_URL=https://jesro15.github.io/mini-ochem/ npm run test:browser
 ```
 
-No npm install is required for the app itself. OpenChemLib and Three.js are loaded as pinned browser ESM modules.
+GitHub Actions installs locked dependencies and runs chemistry and browser tests. The Pages workflow deploys only the tested `dist/` build. Enable **Settings → Pages → GitHub Actions** for deployment.
 
-## Deep links
-
-The demo supports a formula and view in the URL:
-
-```text
-http://localhost:8000/?formula=CH3CH2CH2CH3&view=newman
-```
-
-Supported view values:
-
-```text
-build
-3d
-newman
-symmetry
-```
-
-## Embed it in the future OChem project
-
-Copy/import these files:
-
-```text
-chem-core.js
-render-3d.js
-render-newman.js
-miniochem.js
-miniochem.css
-```
-
-Then:
-
-```html
-<script type="module" src="./miniochem.js"></script>
-
-<mini-ochem
-  formula="CH3CH2CH2CH3"
-  view="newman">
-</mini-ochem>
-```
-
-From JavaScript:
-
-```js
-const viewer = document.querySelector("mini-ochem");
-
-viewer.setFormula("CH3CH2CH2CH2OCH2CH3");
-viewer.setView("3d");
-```
-
-It emits:
-
-- `moleculechange` with condensed formula, generated SMILES, molecular formula, and broad functional-group classification.
-- `viewchange` with the active representation.
-
-This gives a future OChem/Codex project a stable interface rather than depending on the demo page.
-
-## Examples already covered by tests
-
-- `(CH3CH2CH2)2NH`
-- `CH3CH2CH2CH2OCH2CH3`
-- `CH3(CH2)4CH3`
-- `CH3CH(CH3)CH3`
-- `CH2=CHCH3`
-- `CH3CH2CH2CH3`
-
-## Parser scope today
-
-Supported:
-
-- common acyclic condensed formulas,
-- C, N, O, S, P, F, Cl, Br, I,
-- H counts attached to an atom token,
-- common branches,
-- repeated parenthetical groups,
-- single, double, and triple bonds,
-- common neutral valence checks.
-
-Not yet a general chemical language:
-
-- rings,
-- stereochemical `R/S` or `E/Z`,
-- charged condensed-formula grammar,
-- resonance families,
-- reaction/mechanism arrows,
-- force-field conformer minimization,
-- automatic point-group assignment.
-
-## Next useful OChem layers
-
-The component boundary is designed so later additions can use the same graph:
-
-1. **Conformation coupling** — rotating a Newman dihedral should rotate the corresponding fragment in the 3D scene.
-2. **Wedge/dash and chirality** — assign stereocenters and compare 2D wedge/dash drawings with 3D configurations.
-3. **Cyclohexane** — chair/boat conformers, axial/equatorial positions, ring flips.
-4. **Symmetry operations** — explicit Cn rotation, sigma reflection, inversion, and optional point-group classification using chemically valid coordinates.
-5. **Resonance / electron pushing** — animate lone pairs and pi electrons while preserving graph/electron bookkeeping.
-6. **Orbital mode** — p-orbital alignment for conjugation, sp/sp2/sp3 geometry, and sigma/pi bond decomposition.
-
-## Rendering choices
-
-- **OpenChemLib** is used for chemistry-aware 2D molecular depiction.
-- **Three.js** is used for interactive spatial reasoning and orbit controls.
-- Custom SVG is used for Newman projections and Lewis/connectivity teaching graphics.
-
-This keeps the app small while leaving room for deeper OChem visualization later.
-
-
-## GitHub Pages: one-time repository setting
-
-The normal GitHub repository page only displays source files; it does **not** execute `index.html`.
-
-A Pages deployment workflow is already included at:
-
-```text
-.github/workflows/pages.yml
-```
-
-For the live app, enable Pages once in the repository UI:
-
-1. Open **Settings → Pages**.
-2. Under **Build and deployment**, set **Source** to **GitHub Actions**.
-3. Then run **Actions → Deploy MiniOChem to GitHub Pages → Run workflow**, or push another commit.
-
-The expected live URL is:
-
-```text
-https://jesro15.github.io/learn_sci/
-```
-
-Because this repository is private, GitHub Pages for it requires a GitHub plan that supports Pages on private repositories. If the Pages setting is unavailable, either make a separate public deployment repository or use the local/Codex workflow below.
+The `<mini-ochem>` custom element retains `setMolecule`, `setFormula`, `setView`, `moleculechange`, and `viewchange`. Import it through the build tool; primary `view` values are `skeletal` and `3d`, with Lewis/Newman/symmetry accessible through the secondary controls.

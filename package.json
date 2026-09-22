@@ -3,7 +3,19 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --check chem-core.js && node --check molecule-resolver.js && node --check miniochem.js && node --check render-3d.js && node --check render-newman.js && node tests/core.test.mjs",
-    "serve": "python3 -m http.server 8000"
+    "test": "node --check chem-core.js && node --check molecule-resolver.js && node --check miniochem.js && node --check render-3d.js && node --check render-newman.js && node tests/core.test.mjs && node tests/structure.test.mjs",
+    "serve": "vite --host 127.0.0.1",
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test:browser": "playwright test"
+  },
+  "dependencies": {
+    "openchemlib": "9.25.0",
+    "three": "0.180.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "vite": "8.3.0"
   }
 }
