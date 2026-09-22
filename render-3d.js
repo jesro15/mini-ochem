@@ -551,6 +551,7 @@ export class Molecule3DView {
     this.camera.position.set(distance * 0.72, distance * 0.54, distance);
     this.controls.target.set(0, 0, 0);
     this.controls.update();
+    this.controls.saveState();
     this.setOverlays({});
   }
 
@@ -634,8 +635,41 @@ export class Molecule3DView {
     }
   }
 
+  adjustView(direction) {
+    if (direction === "reset") { this.controls.reset(); return; }
+    const offset = this.camera.position.clone().sub(this.controls.target);
+    const spherical = new THREE.Spherical().setFromVector3(offset);
+    const step = THREE.MathUtils.degToRad(15);
+    if (direction === "left") spherical.theta += step;
+    if (direction === "right") spherical.theta -= step;
+    if (direction === "up") spherical.phi += step;
+    if (direction === "down") spherical.phi -= step;
+    spherical.phi = THREE.MathUtils.clamp(spherical.phi, 0.05, Math.PI - 0.05);
+    this.camera.position.copy(this.controls.target).add(new THREE.Vector3().setFromSpherical(spherical));
+    this.camera.lookAt(this.controls.target);
+    this.controls.update();
+  }
+
   mount(element) {
     if (this.renderer.domElement.parentElement !== element) element.prepend(this.renderer.domElement);
+    if (!this.viewButtons) {
+      this.viewButtons = document.createElement("div");
+      this.viewButtons.className = "view-rotation-controls";
+      this.viewButtons.setAttribute("role", "group");
+      this.viewButtons.setAttribute("aria-label", "3D view controls");
+      for (const [direction, icon, label] of [
+        ["left", "←", "Rotate left"], ["up", "↑", "Rotate up"],
+        ["down", "↓", "Rotate down"], ["right", "→", "Rotate right"],
+        ["reset", "↺", "Reset view"]
+      ]) {
+        const button = document.createElement("button");
+        button.type = "button"; button.textContent = icon;
+        button.setAttribute("aria-label", label); button.title = label;
+        button.addEventListener("click", () => this.adjustView(direction));
+        this.viewButtons.append(button);
+      }
+    }
+    if (this.viewButtons.parentElement !== element) element.append(this.viewButtons);
     this.resize(element.clientWidth, element.clientHeight || 520);
   }
 
@@ -684,6 +718,7 @@ export class Molecule3DView {
 
   dispose() {
     if (this.raf) cancelAnimationFrame(this.raf);
+    this.viewButtons?.remove();
     this.controls.dispose();
     const geometries = new Set(), materials = new Set();
     this.scene.traverse(object => {

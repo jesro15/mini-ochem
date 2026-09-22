@@ -20,7 +20,7 @@ On phones the editor and controls fit the viewport, support pointer/touch drawin
 
 Search **dimethylcyclopropane** to compare its complete four-member family immediately: 1,1-dimethylcyclopropane, the cis-1,2 meso form, and the two trans-1,2 enantiomers. Searching **1,2-dimethylcyclopropane** limits the comparison to its three stereoisomers. These are explicit structure records, not an arbitrary first PubChem name match. They work without a PubChem connection.
 
-Use **Skeletal comparison** or **3D comparison**. Up to four cards stay side by side; on phones the row scrolls horizontally. Each computed 3D model rotates independently. **Explore this structure** opens the existing teaching views without discarding the comparison.
+Use **Skeletal comparison** or **3D comparison**. Up to four cards stay side by side; on phones the row scrolls horizontally. Each computed 3D model rotates independently. All 3D views have left/up/down/right arrows for 15° rotation steps and a reset button; drag and pinch/scroll controls remain available. **Explore this structure** opens the existing teaching views without discarding the comparison.
 
 For a loaded molecule, **Isomers / compare** enumerates tetrahedral carbon and non-ring double-bond configurations for its current connectivity, deduplicating symmetry-equivalent structures (including meso duplicates). At most six stereo elements / 64 assignments are enumerated. This is a deliberately bounded enumerator: axial, ring-double-bond, non-carbon, and other stereochemistry are not enumerated. The dimethylcyclopropane family also includes the other methyl position pattern.
 

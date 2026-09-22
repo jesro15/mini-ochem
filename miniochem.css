@@ -1160,3 +1160,18 @@ select {
 .candidate-option { display:flex; flex-direction:column; gap:6px; }
 .candidate-option .compound-card { flex:1; width:100%; }
 @media(max-width:600px) { .comparison { padding:10px; } .comparison-grid { grid-auto-columns: minmax(280px,85vw); } }
+
+.view-rotation-controls {
+  position:absolute; bottom:12px; left:50%; transform:translateX(-50%);
+  z-index:3; display:flex; width:max-content; gap:4px; padding:4px; border-radius:12px;
+  background:rgba(255,253,248,.94); border:1px solid #d8d0c4;
+}
+.view-rotation-controls button, .comparison .view-rotation-controls button {
+  flex:0 0 44px; width:44px; height:44px; min-height:44px; padding:0; border:1px solid #d8d0c4;
+  border-radius:8px; background:white; color:#24231f; font-size:24px;
+  line-height:1; cursor:pointer; touch-action:manipulation;
+}
+.view-rotation-controls button:hover { background:#eee9df; }
+.view-rotation-controls button:active { background:#d8e5dc; }
+.view-rotation-controls button:focus-visible { outline:3px solid #446c59; outline-offset:2px; }
+.stage-help { bottom:76px; }
