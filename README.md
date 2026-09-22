@@ -16,6 +16,18 @@ Custom structures are shared in the URL as explicit `SMILES:` queries, retaining
 
 On phones the editor and controls fit the viewport, support pointer/touch drawing, and provide a text alternative for precise stereochemical input. The chemistry editor's native icon toolbar is denser than the surrounding touch controls.
 
+## Compare isomers
+
+Search **dimethylcyclopropane** to compare its complete four-member family immediately: 1,1-dimethylcyclopropane, the cis-1,2 meso form, and the two trans-1,2 enantiomers. Searching **1,2-dimethylcyclopropane** limits the comparison to its three stereoisomers. These are explicit structure records, not an arbitrary first PubChem name match. They work without a PubChem connection.
+
+Use **Skeletal comparison** or **3D comparison**. Up to four cards stay side by side; on phones the row scrolls horizontally. Each computed 3D model rotates independently. **Explore this structure** opens the existing teaching views without discarding the comparison.
+
+For a loaded molecule, **Isomers / compare** enumerates tetrahedral carbon and non-ring double-bond configurations for its current connectivity, deduplicating symmetry-equivalent structures (including meso duplicates). At most six stereo elements / 64 assignments are enumerated. This is a deliberately bounded enumerator: axial, ring-double-bond, non-carbon, and other stereochemistry are not enumerated. The dimethylcyclopropane family also includes the other methyl position pattern.
+
+**Add current to comparison**, or **Add to comparison** in formula/name/related results, builds a custom comparison. Duplicate structures are not added twice, and a fifth card requires removing one first. **Same formula** is a bounded PubChem result list, not a claim to enumerate every constitutional isomer. Multiple PubChem name matches now show a chooser instead of silently taking the first record.
+
+`isomers.js` owns family records and bounded stereo enumeration; `comparison-panel.js` owns the comparison views, cached geometry, and renderer cleanup. Tests verify the distinct family members, meso deduplication, R/S labels, cis/trans ring-face geometry, side-by-side desktop/mobile rendering, and switching into the existing views.
+
 ## Editor choice
 
 We evaluated [Ketcher](https://github.com/epam/ketcher) and [OpenChemLib CanvasEditor](https://cheminfo.github.io/openchemlib-js/classes/CanvasEditor.html). Ketcher offers a broader editing UI, but its standalone React/Indigo stack would add another chemistry engine and integration layer. OpenChemLib 9.25.0 is already the app's chemistry engine and includes CanvasEditor, isomeric SMILES, stereo-aware 2D coordinate invention, and [stereo-aware conformer generation](https://cheminfo.github.io/openchemlib-js/classes/ConformerGenerator.html). It therefore fits this small teaching app better. It is pinned and bundled, along with Three.js, rather than fetched from an ESM CDN at runtime.

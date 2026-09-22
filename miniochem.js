@@ -1,3 +1,5 @@
+import { ComparisonPanel } from "./comparison-panel.js";
+import { isomersForStructure } from "./isomers.js";
 import {
   ELEMENTS,
   atomHybridization,
@@ -47,7 +49,9 @@ const TEMPLATE = [
     '<div class="error" hidden></div>',
     '<div class="candidates" hidden></div>',
 
+    '<section class="comparison" aria-label="Side-by-side comparison" hidden></section>',
     '<section class="workspace" hidden>',
+      '<div class="isomer-actions"><button type="button" id="browseIsomers">Isomers / compare</button><button type="button" id="compareCurrent">Add current to comparison</button></div>',
       '<div class="toolbar">',
         '<div class="segmented" aria-label="Primary representation">',
           '<button type="button" class="view-button active" data-view="skeletal">Skeletal</button>',
@@ -707,6 +711,7 @@ class MiniOChem extends HTMLElement {
   }
 
   connectedCallback() {
+    this.comparison = new ComparisonPanel(this.$(".comparison"), item => this.chooseCandidate(item));
     this.bindUI();
 
     const initial =
@@ -726,6 +731,7 @@ class MiniOChem extends HTMLElement {
   }
 
   disconnectedCallback() {
+    if (this.comparison) this.comparison.dispose();
     if (this.editor) { this.editor.destroy(); this.editor = null; }
     if (this.resizeObserver) this.resizeObserver.disconnect();
     if (this.threeView) this.threeView.dispose();
@@ -800,6 +806,19 @@ class MiniOChem extends HTMLElement {
   }
 
   bindUI() {
+    this.$("#compareCurrent").addEventListener("click", () => {
+      const result = this.state.resolved;
+      if (result) this.comparison.add({ ...result.metadata, smiles: result.smiles, generated: !result.metadata.cid });
+    });
+    this.$("#browseIsomers").addEventListener("click", () => {
+      try {
+        const family = isomersForStructure(this.state.resolved.smiles);
+        this.pendingCandidates = family.items;
+        this.renderCandidates({ query: "Isomers", description: family.description, candidates: family.items });
+        this.comparison.setItems(family.items.slice(0,4), family.description);
+        this.$(".comparison").scrollIntoView({block:"start", behavior:"smooth"});
+      } catch (error) { this.$(".error").textContent = error.message; this.$(".error").hidden = false; }
+    });
     this.$("#editStructure").addEventListener("click", () => this.openEditor());
     this.$("#cancelStructure").addEventListener("click", () => { ++this.requestVersion; this.closeEditor(); });
     this.$("#applyStructure").addEventListener("click", () => this.applyStructure());
@@ -935,6 +954,8 @@ class MiniOChem extends HTMLElement {
     });
 
     this.$(".candidates").addEventListener("click", function (event) {
+      const compare = event.target.closest("[data-compare-candidate]");
+      if (compare) { self.comparison.add(self.pendingCandidates[Number(compare.dataset.compareCandidate)]); return; }
       const button = event.target.closest("[data-candidate]");
       if (!button) return;
 
@@ -949,6 +970,8 @@ class MiniOChem extends HTMLElement {
     });
 
     this.$(".related-results").addEventListener("click", function (event) {
+      const compare = event.target.closest("[data-compare-related]");
+      if (compare) { self.comparison.add(self.state.relatedItems[Number(compare.dataset.compareRelated)]); return; }
       const button = event.target.closest("[data-compound-index]");
       if (!button) return;
 
@@ -972,6 +995,13 @@ class MiniOChem extends HTMLElement {
       if (result.ambiguous) {
         this.pendingCandidates = result.candidates;
         this.renderCandidates(result);
+        if (result.autoCompare) {
+          this.comparison.setItems(result.candidates, result.description);
+          this.$(".candidates").hidden = true;
+          this.$(".workspace").hidden = true;
+          this.$(".status").hidden = true;
+        }
+        this.dispatchEvent(new CustomEvent("querychange", { detail: { query: value }, bubbles: true, composed: true }));
         return;
       }
 
@@ -1012,12 +1042,12 @@ class MiniOChem extends HTMLElement {
 
     box.innerHTML =
       '<div class="candidate-head">' +
-        '<strong>' + esc(result.query) + '</strong> is a molecular formula, so it can describe more than one structure. Choose one:' +
+        '<strong>' + esc(result.query) + '</strong> · ' + esc(result.description || "Molecular formula matches from PubChem (up to 12 records, not an exhaustive isomer list). Explore a structure or add it to compare.") +
       '</div>' +
       '<div class="candidate-grid">' +
         rows.map(function (item, index) {
           return (
-            '<button type="button" class="compound-card" data-candidate="' + index + '">' +
+            '<div class="candidate-option"><button type="button" class="compound-card" data-candidate="' + index + '">' +
               '<div class="compound-thumb">' +
                 candidateSvg(item.smiles, "candidate-" + index) +
               '</div>' +
@@ -1025,9 +1055,9 @@ class MiniOChem extends HTMLElement {
                 esc(item.title || item.iupacName || ("CID " + item.cid)) +
               '</div>' +
               '<div class="compound-meta">' +
-                esc(item.molecularFormula || "") + ' · CID ' + esc(item.cid) +
+                esc(item.molecularFormula || "") + (item.cid ? ' · CID ' + esc(item.cid) : '') +
               '</div>' +
-            '</button>'
+            '</button><button type="button" class="add-compare" data-compare-candidate="' + index + '">Add to comparison</button></div>'
           );
         }).join("") +
       '</div>';
@@ -1478,7 +1508,7 @@ class MiniOChem extends HTMLElement {
       box.innerHTML =
         '<div class="related-grid">' +
         rows.map(function (item, index) {
-          return candidateCard(item, index, mode);
+          return '<div class="candidate-option">' + candidateCard(item, index, mode) + '<button type="button" class="add-compare" data-compare-related="' + index + '">Add to comparison</button></div>';
         }).join("") +
         '</div>';
     } catch (error) {

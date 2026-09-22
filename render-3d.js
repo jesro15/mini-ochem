@@ -640,8 +640,8 @@ export class Molecule3DView {
   }
 
   resize(width, height) {
-    width = Math.max(320, width || 320);
-    height = Math.max(380, height || 520);
+    width = Math.max(1, width || 320);
+    height = Math.max(1, height || 520);
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
@@ -685,6 +685,13 @@ export class Molecule3DView {
   dispose() {
     if (this.raf) cancelAnimationFrame(this.raf);
     this.controls.dispose();
+    const geometries = new Set(), materials = new Set();
+    this.scene.traverse(object => {
+      if (object.geometry) geometries.add(object.geometry);
+      for (const material of [object.material].flat().filter(Boolean)) materials.add(material);
+    });
+    geometries.forEach(geometry => geometry.dispose());
+    materials.forEach(material => { if (material.map) material.map.dispose(); material.dispose(); });
     this.renderer.dispose();
   }
 }

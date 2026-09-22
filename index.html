@@ -40,6 +40,13 @@
       history.replaceState(null, "", url);
     });
 
+    app.addEventListener("querychange", (event) => {
+      const url = new URL(location.href);
+      url.searchParams.delete("formula"); url.searchParams.delete("molecule");
+      url.searchParams.set("q", event.detail.query);
+      history.replaceState(null, "", url);
+    });
+
     app.addEventListener("viewchange", (event) => {
       const url = new URL(location.href);
       url.searchParams.set("view", event.detail.view);

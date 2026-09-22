@@ -1,3 +1,4 @@
+import { namedIsomerFamily } from "./isomers.js";
 import * as OCL from "openchemlib";
 import { graphFromOCL, resolveStructure, structureResult } from "./molecule-structure.js";
 export { graphFromOCL } from "./molecule-structure.js";
@@ -194,6 +195,7 @@ export async function resolveCandidate(candidate, originalQuery) {
   }
 
   const authoritative = moleculeFromSmiles(candidate.smiles);
+  if (candidate.generated) return resolveStructure(authoritative, { metadata: { title: candidate.title } });
   const fetched = await fetchPubChem3D(candidate.cid);
   const molecule3d = fetched && fetched.getIDCode() === authoritative.getIDCode() ? fetched : null;
   if (!molecule3d) return resolveStructure(authoritative, { query: candidate.cid ? "CID " + candidate.cid : originalQuery || candidate.title, inputType: "PubChem", metadata: candidate });
@@ -210,6 +212,9 @@ export async function resolveMolecule(input) {
   if (!query) {
     throw new Error("Enter a molecule, structure string, or identifier.");
   }
+
+  const family = namedIsomerFamily(query);
+  if (family && family.candidates.length > 1) return family;
 
   if (/^SMILES:/i.test(query)) return resolveStructure(moleculeFromSmiles(query.slice(7)), { inputType: "SMILES" });
 
@@ -299,7 +304,8 @@ export async function resolveMolecule(input) {
     );
   }
 
-  const rows = await propertiesForCids([cids[0]]);
+  const rows = await propertiesForCids(cids);
+  if (rows.length > 1) return { ambiguous: true, query, inputType: "name", candidates: rows, description: "Multiple name matches returned by PubChem. Choose one or add structures to compare. Results are limited to 12 records, not an exhaustive isomer list." };
   return resolveCandidate(rows[0], query);
 }
 
