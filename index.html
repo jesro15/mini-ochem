@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>MiniOChem</title>
   <meta name="description" content="Interactive organic chemistry structure visualizer.">
+  <link rel="stylesheet" href="./chapter-one.css">
   <style>
     html, body {
       margin: 0;
@@ -14,7 +15,15 @@
   </style>
 </head>
 <body>
-  <mini-ochem id="ochem"></mini-ochem>
+  <nav class="app-nav" role="tablist" aria-label="MiniOChem pages">
+    <button type="button" role="tab" id="structures-tab" data-app-tab="structures" aria-controls="structures-panel" aria-selected="true">Structures</button>
+    <button type="button" role="tab" id="chapter-one-tab" data-app-tab="chapter1" aria-controls="chapter-one" aria-selected="false" tabindex="-1">Chapter 1 practice</button>
+  </nav>
+  <section id="structures-panel" role="tabpanel" aria-labelledby="structures-tab">
+    <mini-ochem id="ochem"></mini-ochem>
+  </section>
+  <section id="chapter-one" class="practice-page" role="tabpanel" aria-labelledby="chapter-one-tab" hidden></section>
+  <script type="module" src="./chapter-one.js"></script>
 
   <script type="module" src="./miniochem.js"></script>
   <script type="module">

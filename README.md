@@ -4,6 +4,16 @@
 
 An organic chemistry teaching app with an editable molecular structure shared by skeletal, 3D, Lewis, Newman, symmetry, hybridization, bond-length, and bond-angle views.
 
+## Chapter 1 textbook practice
+
+Choose **Chapter 1 practice** for the 32 textbook problems assigned by Fall 2026 Problem Set 1: **1.4–1.22, 1.24, 1.37–1.39, 1.42–1.45, 1.48–1.52**. The source is the supplied Jones & Fleming *Organic Chemistry*, fifth edition, printed pp. 15–49 (PDF pp. 55–89).
+
+The first pass consolidates prompts and original subparts, with lightly condensed prose, printed/PDF page references, topic filters, a problem selector, share links such as `#problem-1.38`, and browser-local reviewed checkboxes. It contains no solutions. Worked examples are labeled; 1.14 and 1.18 include supplied starting/reference forms needed to make the prompts self-contained. Textbook PDFs and screenshots are not shipped.
+
+Chemical diagrams are native SVG from explicit, editable atom/bond records in `chapter-one-data.js`, rendered by `chapter-one-structures.js`. Charge, radical, lone-pair and bond-order annotations are source-authored; the renderer does not infer answers or repair intentionally incomplete structures. Some explicit C–H bonds are condensed to CH/CH₂/CH₃. Tetrahedral structures use wedges/hashes; the book's additional tetrahedral outlines are omitted. This tab is a question reference, not an answer checker or drawing worksheet.
+
+`chapter-one.js` and `chapter-one.css` contain the isolated practice interface. Switching tabs keeps the structure explorer mounted and preserves its query and current molecule. Tests check assignment/subpart coverage, sensitive source annotations, filtering, saved progress, direct links, storage failure, desktop/phone layout, and return to the explorer.
+
 ## Draw and choose isomers
 
 1. Search by name, condensed formula, SMILES, InChI, InChIKey, CAS number, or PubChem CID. Molecular formulas show a candidate chooser when ambiguous.
