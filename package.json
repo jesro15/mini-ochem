@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --check chem-core.js && node --check molecule-resolver.js && node --check miniochem.js && node --check render-3d.js && node --check render-newman.js && node tests/core.test.mjs && node tests/structure.test.mjs && node tests/isomers.test.mjs",
+    "test": "node --check chem-core.js && node --check molecule-resolver.js && node --check miniochem.js && node --check practice.js && node --check render-3d.js && node --check render-newman.js && node tests/core.test.mjs && node tests/structure.test.mjs && node tests/isomers.test.mjs",
     "serve": "vite --host 127.0.0.1",
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
@@ -18,4 +18,4 @@
     "@playwright/test": "1.63.0",
     "vite": "8.3.0"
   }
-}
+}\n
