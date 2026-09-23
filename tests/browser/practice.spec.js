@@ -26,7 +26,7 @@ test('Chapter 1 practice mode indexes the assigned set and keeps notes', async (
   await expect(page.getByRole('heading', { name: 'Chapter 1' })).toBeVisible();
   await expect(page.locator('ochem-practice textarea[data-note-key="ochem-practice-1.4"]')).toHaveValue('dipole practice note');
 
-  await page.getByRole('button', { name: 'Visualizer' }).click();
+  await page.getByRole('button', { name: 'Visualizer', exact: true }).click();
   await expect(page.locator('[data-mode-panel="visualizer"]')).toBeVisible();
   await expect(page.locator('[data-mode-panel="practice"]')).toBeHidden();
 
