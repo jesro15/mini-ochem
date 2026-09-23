@@ -4,7 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>MiniOChem</title>
-  <meta name="description" content="Interactive organic chemistry structure visualizer.">
+  <meta name="description" content="Interactive organic chemistry structure visualizer and practice workspace.">
+  <link rel="stylesheet" href="./practice.css">
   <style>
     html, body {
       margin: 0;
@@ -14,12 +15,27 @@
   </style>
 </head>
 <body>
-  <mini-ochem id="ochem"></mini-ochem>
+  <section class="app-view" data-mode-panel="visualizer">
+    <mini-ochem id="ochem"></mini-ochem>
+  </section>
+
+  <section class="app-view" data-mode-panel="practice" hidden>
+    <ochem-practice id="practice"></ochem-practice>
+  </section>
+
+  <nav class="app-mode-switch" aria-label="MiniOChem mode">
+    <button type="button" data-mode="visualizer" class="active">Visualizer</button>
+    <button type="button" data-mode="practice">Practice</button>
+  </nav>
 
   <script type="module" src="./miniochem.js"></script>
+  <script type="module" src="./practice.js"></script>
   <script type="module">
     const app = document.querySelector("#ochem");
+    const practice = document.querySelector("#practice");
     const params = new URLSearchParams(location.search);
+    const modeButtons = Array.from(document.querySelectorAll("[data-mode]"));
+    const modePanels = Array.from(document.querySelectorAll("[data-mode-panel]"));
 
     const query =
       params.get("q") ||
@@ -28,8 +44,47 @@
 
     const view = params.get("view");
 
+    function setMode(mode, updateUrl = true) {
+      const normalized = mode === "practice" ? "practice" : "visualizer";
+
+      modeButtons.forEach((button) => {
+        button.classList.toggle("active", button.dataset.mode === normalized);
+      });
+
+      modePanels.forEach((panel) => {
+        panel.hidden = panel.dataset.modePanel !== normalized;
+      });
+
+      if (updateUrl) {
+        const url = new URL(location.href);
+        if (normalized === "practice") url.searchParams.set("mode", "practice");
+        else url.searchParams.delete("mode");
+        history.replaceState(null, "", url);
+      }
+    }
+
+    modeButtons.forEach((button) => {
+      button.addEventListener("click", () => setMode(button.dataset.mode));
+    });
+
     if (query) app.setAttribute("molecule", query);
     if (view) app.setAttribute("view", view);
+    setMode(params.get("mode"), false);
+
+    practice.addEventListener("openvisualizer", (event) => {
+      const query = event.detail.query;
+      if (!query) return;
+
+      app.setAttribute("molecule", query);
+      setMode("visualizer");
+
+      const url = new URL(location.href);
+      url.searchParams.delete("formula");
+      url.searchParams.delete("molecule");
+      url.searchParams.set("q", query);
+      url.searchParams.set("view", app.getAttribute("view") || "skeletal");
+      history.replaceState(null, "", url);
+    });
 
     app.addEventListener("moleculechange", (event) => {
       const url = new URL(location.href);
@@ -42,7 +97,8 @@
 
     app.addEventListener("querychange", (event) => {
       const url = new URL(location.href);
-      url.searchParams.delete("formula"); url.searchParams.delete("molecule");
+      url.searchParams.delete("formula");
+      url.searchParams.delete("molecule");
       url.searchParams.set("q", event.detail.query);
       history.replaceState(null, "", url);
     });
@@ -51,6 +107,11 @@
       const url = new URL(location.href);
       url.searchParams.set("view", event.detail.view);
       history.replaceState(null, "", url);
+    });
+
+    window.addEventListener("popstate", () => {
+      const current = new URLSearchParams(location.search);
+      setMode(current.get("mode"), false);
     });
   </script>
 </body>
