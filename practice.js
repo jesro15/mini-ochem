@@ -1,234 +1,86 @@
-import * as OCL from "openchemlib";
-
 const CSS_URL = new URL("./practice.css", import.meta.url).href;
 
-const PROBLEMS = [
-  {
-    number: "1.4", topic: "Dipoles", page: 15,
-    prompt: "For each indicated bond, decide whether it is polar and, if so, draw the dipole direction.",
-    species: [
-      ["H–Cl", "Cl", "hydrogen chloride"],
-      ["H–F", "F", "hydrogen fluoride"],
-      ["Li–CH₃", "[Li]C", "methyllithium"],
-      ["CH₃–Cl", "CCl", "chloromethane"],
-      ["HO–NH₂", "NO", "hydroxylamine"],
-      ["CH₃–CH₃", "CC", "ethane"]
-    ]
+const CHAPTERS = {
+  "1": {
+    label: "Chapter 1",
+    categories: {
+      "Dipoles": [
+        ["1.4", "Show the direction of the dipole, if there is one, in the indicated bonds of the following molecules:", "H–Cl    H–F    Li–CH₃    H₃C–Cl    HO–NH₂    H₃C–CH₃"],
+        ["1.5", "Which of these two molecules has a dipole moment and which does not? Look carefully at the shapes of the two tetrahedral molecules.", "CCl₄    CHCl₃"]
+      ],
+      "Lewis structures": [
+        ["1.6", "Construct Lewis structures for the following neutral molecules:", "(a) BF₃    (b) H₂Be    (c) SiH₄    (d) CH₂Cl₂    (e) HOCH₃    (f) H₂N–NH₂"],
+        ["1.7", "Draw Lewis structures for the following neutral species. Use lines to indicate electrons in bonds and dots to indicate nonbonding electrons.", "(a) CH₃·    (b) CH₂    (c) Br·    (d) ·OH    (e) ·NH₂    (f) H₃C–N"],
+        ["1.8", "Each of the following compounds has at least one multiple bond. Draw a Lewis structure for each molecule. Use lines to indicate electrons in bonds and dots to indicate nonbonding electrons.", "(a) F₂C=CF₂    (b) H₃CCN    (c) H₂CO    (d) H₂CCO    (e) H₂CCHCHCH₂    (f) H₃CNO    (g) H₃COCO₂H"],
+        ["1.9", "Draw Lewis structures for the following charged species. In each case, the charge is shown closest to the charged atom.", "(a) OH⁻    (b) BH₄⁻    (c) NH₄⁺    (d) Cl⁻    (e) CH₃⁺    (f) H₃O⁺    (g) NO₂⁺"],
+        ["1.52", "Write Lewis dot structures for the neutral diatomic molecules F₂ and N₂. In F₂, there is a single bond between the two atoms, but in N₂ there is a triple bond between the two atoms.", ""]
+      ],
+      "Formal charge": [
+        ["1.10", "Add charges to the following compounds wherever necessary:", "(a) CH₂    (b) CH₃    (c) C–H framework    (d) OH    (e) OH₃    (f) H₂C–O    (g) HN–C–NH"],
+        ["1.11", "Add electrons to complete the following Lewis structures. In each case, the charge is placed as close as possible to the charged atom.", "(a) CH₂⁺    (b) CH₃CH₂⁻    (c) two-carbon charged structure    (d) H₃O⁺    (e) OH⁻    (f) NH₂⁺    (g) NH₂⁻    (h) CH₃–C–N charged structure"],
+        ["1.12", "Draw a Lewis structure for nitric acid (HO–NO₂), and verify that the nitrogen is positive and one of the oxygens is negative.", ""],
+        ["1.48", "Add charges to the following molecules where necessary:", "(a) three-membered O ring    (b) three-membered N ring    (c) three-membered Br ring    (d) three-membered S ring"],
+        ["1.49", "Add charges to the following molecules where necessary:", "(a–c) O structures    (d–f) S structures    (g–i) N structures    (j–l) P structures"],
+        ["1.50", "Determine the formal charge, if there is one, for each of the nitrogens in the following molecules:", "(a)    (b)    (c)    (d)"],
+        ["1.51", "Determine the formal charges, if any, for the molecules shown below.", "(a)    (b)    (c)    (d)"]
+      ],
+      "Resonance": [
+        ["1.13", "Use the curved arrow formalism to convert your Lewis structure for nitric acid (HO–NO₂, Problem 1.12) into a resonance form.", ""],
+        ["1.14", "Draw another structure for nitromethane in which every atom is neutral. Hint: There are only single bonds in this structure.", ""],
+        ["1.15", "Acetone, (CH₃)₂CO, is similar to formaldehyde. Draw a Lewis structure for acetone. Draw two resonance forms. Which do you suppose contributes more to the molecule? Why? Which contributes less? Why?", ""],
+        ["1.16", "Use the arrow formalism to convert each of the following Lewis structures into another resonance form. Notice that part (e) asks you to do something new—to move electrons one at a time in writing Lewis forms.", "(a)    (b)    (c)    (d) H₃N–BH₃    (e)"],
+        ["1.17", "Use the arrow formalism to write resonance forms that contribute to the structures of the following molecules:", "(a)    (b)    (c)    (d)    (e)"],
+        ["1.18", "Write two more resonance forms for 1,3-butadiene.", "CH₂=CH–CH=CH₂"],
+        ["1.19", "Add dots for the electron pairs and write resonance forms for the following structures:", "(a)    (b)    (c)    (d)    (e)    (f)    (g)"],
+        ["1.20", "Write Lewis structures and resonance forms for the following compounds.", "(a) NCCH₂⁻    (b) ⁻OSO₂OH    (c) CH₃COO⁻"],
+        ["1.21", "Which of the following pairs of structures are not resonance forms of each other? Why not? You may have to add dots to make good Lewis structures first.", "(a)    (b)    (c)    (d)"],
+        ["1.22", "In the following pairs of resonance forms, indicate which form you think is more important and therefore contributes more to the structure. Justify your choice. You may have to add dots to make good Lewis structures first.", "(a)    (b)    (c)    (d)    (e)"],
+        ["1.37", "Use the arrow formalism to write structures for the resonance forms contributing to the structures of the following ions:", "(a) carbonate ion    (b) sulfate ion    (c) nitrate ion    (d) guanidinium ion    (e) a vinyl ammonium ion"],
+        ["1.38", "Use the arrow formalism to draw three additional resonance structures for each of the following molecules:", "(a)    (b)    (c)    (d)    (e)    (f)"],
+        ["1.39", "Draw three resonance structures for each of the following:", "(a) ⁻CH₂NO₂    (b) CH₃CO₂CH₃    (c) ⁻CH₂CO₂⁻    (d) HOSO₂O⁻"],
+        ["1.42", "Draw resonance forms for the following cyclic molecules:", "(a)    (b)    (c)"],
+        ["1.43", "Draw resonance forms for the following acyclic molecules:", "(a)    (b)"],
+        ["1.44", "Ozone (O₃) resembles the molecules in Problem 1.38. Write a Lewis “dot” structure for ozone and sketch out contributing resonance forms. Write one neutral resonance form. Be careful with this last part; the answer is tricky.", "O₃"],
+        ["1.45", "Draw two resonance structures for each of the compounds shown below.", "(a)    (b)"]
+      ],
+      "Molecular orbitals": [
+        ["1.24", "Sketch the orbitals produced through the interaction of a carbon 2s atomic orbital overlapping end-on with a carbon 2p atomic orbital.", "2s + 2p"]
+      ]
+    }
   },
-  {
-    number: "1.5", topic: "Dipoles", page: 16,
-    prompt: "Compare the two tetrahedral molecules and determine which has a net molecular dipole and which has bond dipoles that cancel.",
-    species: [
-      ["CCl₄", "ClC(Cl)(Cl)Cl", "carbon tetrachloride"],
-      ["CHCl₃", "ClC(Cl)Cl", "chloroform"]
-    ]
-  },
-  {
-    number: "1.6", topic: "Lewis structures", page: 17, worked: true,
-    prompt: "Construct complete Lewis structures for each neutral molecule, including all lone pairs.",
-    species: [
-      ["BF₃", "FB(F)F", "boron trifluoride"],
-      ["BeH₂", "[H][Be][H]", "beryllium hydride"],
-      ["SiH₄", "[SiH4]", "silane"],
-      ["CH₂Cl₂", "ClCCl", "dichloromethane"],
-      ["HOCH₃", "CO", "methanol"],
-      ["H₂N–NH₂", "NN", "hydrazine"]
-    ]
-  },
-  {
-    number: "1.7", topic: "Lewis structures", page: 18, worked: true,
-    prompt: "Draw Lewis structures for the neutral species. Use bond lines for shared pairs and dots for nonbonding electrons.",
-    labels: ["CH₃·", "CH₂", "Br·", "·OH", "·NH₂", "H₃C–N"]
-  },
-  {
-    number: "1.8", topic: "Lewis structures", page: 19, worked: true,
-    prompt: "Each species requires at least one multiple bond. Complete the Lewis structure and place all nonbonding electrons.",
-    labels: ["F₂C=CF₂", "CH₃CN", "H₂CO", "H₂C=C=O", "H₂C=CH–CH=CH₂", "CH₃NO", "the oxygen-containing structure shown in part (g)"],
-    species: [
-      ["F₂C=CF₂", "FC(F)=C(F)F", "tetrafluoroethene"],
-      ["CH₃CN", "CC#N", "acetonitrile"],
-      ["H₂CO", "C=O", "formaldehyde"],
-      ["H₂C=C=O", "C=C=O", "ketene"],
-      ["1,3-butadiene", "C=CC=C", "1,3-butadiene"]
-    ]
-  },
-  {
-    number: "1.9", topic: "Formal charge", page: 21,
-    prompt: "Draw complete Lewis structures for the charged species. The stated charge belongs on the indicated atom in the source setup.",
-    labels: ["OH⁻", "BH₄⁻", "NH₄⁺", "Cl⁻", "CH₃⁺", "H₃O⁺", "NO₂⁺"],
-    species: [
-      ["OH⁻", "[OH-]", "hydroxide"],
-      ["BH₄⁻", "[BH4-]", "borohydride"],
-      ["NH₄⁺", "[NH4+]", "ammonium"],
-      ["Cl⁻", "[Cl-]", "chloride"],
-      ["CH₃⁺", "[CH3+]", "methyl cation"],
-      ["H₃O⁺", "[OH3+]", "hydronium"],
-      ["NO₂⁺", "O=[N+]=O", "nitronium"]
-    ]
-  },
-  {
-    number: "1.10", topic: "Formal charge", page: 22,
-    prompt: "Add formal charges wherever required in each of the seven Lewis structures supplied in the textbook.",
-    labels: ["(a) CH₂ framework", "(b) CH₃ framework", "(c) C–H framework", "(d) OH framework", "(e) OH₃ framework", "(f) H₂C–O framework", "(g) HN–C–NH framework"],
-    diagramDependent: true
-  },
-  {
-    number: "1.11", topic: "Formal charge", page: 22,
-    prompt: "Add the missing electrons to complete each charged Lewis structure. Keep the given atomic connectivity and charge locations.",
-    labels: ["CH₂⁺", "CH₃CH₂⁻", "two-carbon charged framework", "H₃O⁺", "OH⁻", "NH₂⁺", "NH₂⁻", "methyl–C–N charged framework"],
-    diagramDependent: true
-  },
-  {
-    number: "1.12", topic: "Formal charge", page: 24,
-    prompt: "Draw nitric acid as HO–NO₂ and verify the formal-charge pattern: nitrogen positive and one oxygen negative.",
-    species: [["HNO₃", "O=[N+]([O-])O", "nitric acid"]]
-  },
-  {
-    number: "1.13", topic: "Resonance", page: 25,
-    prompt: "Starting from your nitric-acid Lewis structure, use curved arrows to generate a valid resonance contributor.",
-    species: [["HNO₃", "O=[N+]([O-])O", "nitric acid"]]
-  },
-  {
-    number: "1.14", topic: "Resonance", page: 25, worked: true,
-    prompt: "Draw the alternate nitromethane contributor in which every atom is formally neutral and only single bonds are used.",
-    species: [["CH₃NO₂", "C[N+](=O)[O-]", "nitromethane"]]
-  },
-  {
-    number: "1.15", topic: "Resonance", page: 27,
-    prompt: "Draw acetone's Lewis structure and two resonance contributors. Decide which contributor is more important and justify the weighting.",
-    species: [["acetone", "CC(=O)C", "acetone"]]
-  },
-  {
-    number: "1.16", topic: "Resonance", page: 27,
-    prompt: "For each structure (a–e), use curved-arrow formalism to produce another valid resonance contributor. Part (e) introduces one-electron movement.",
-    labels: ["(a)", "(b)", "(c)", "(d) H₃N→BH₃ donor–acceptor structure", "(e) one-electron resonance example"],
-    diagramDependent: true
-  },
-  {
-    number: "1.17", topic: "Resonance", page: 27, worked: true,
-    prompt: "Use curved arrows to write the resonance contributors for each of the structures shown in parts (a–e).",
-    labels: ["(a)", "(b)", "(c)", "(d)", "(e)"],
-    diagramDependent: true
-  },
-  {
-    number: "1.18", topic: "Resonance", page: 28,
-    prompt: "Starting with 1,3-butadiene, write two additional resonance contributors.",
-    species: [["1,3-butadiene", "C=CC=C", "1,3-butadiene"]]
-  },
-  {
-    number: "1.19", topic: "Resonance", page: 30, worked: true,
-    prompt: "Add all missing lone-pair electrons, then write resonance contributors for each of the seven structures (a–g).",
-    labels: ["(a) carbonyl system", "(b) conjugated carbonyl", "(c) ester", "(d) amide/conjugated N system", "(e) cyclic conjugated system", "(f) cyclic cation system", "(g) aromatic oxygen-anion system"],
-    diagramDependent: true
-  },
-  {
-    number: "1.20", topic: "Resonance", page: 31,
-    prompt: "Draw complete Lewis structures and all relevant resonance contributors for each species.",
-    labels: ["NCCH₂⁻", "⁻OSO₂OH", "CH₃COO⁻"],
-    species: [
-      ["cyanomethyl anion", "[CH2-]C#N", "cyanomethyl anion"],
-      ["acetate", "CC(=O)[O-]", "acetate"]
-    ]
-  },
-  {
-    number: "1.21", topic: "Resonance", page: 31, worked: true,
-    prompt: "For each pair (a–d), decide whether the drawings are resonance contributors of the same species. If not, explain what changed besides electron placement.",
-    labels: ["pair (a)", "pair (b)", "pair (c)", "pair (d)"],
-    diagramDependent: true
-  },
-  {
-    number: "1.22", topic: "Resonance", page: 31,
-    prompt: "For each pair of resonance contributors, identify the more important contributor and justify the choice using octets, bonding, charge separation, and charge placement.",
-    labels: ["pair (a)", "pair (b)", "pair (c)", "pair (d)", "pair (e)"],
-    diagramDependent: true
-  },
-  {
-    number: "1.24", topic: "Molecular orbitals", page: 35, worked: true,
-    prompt: "Sketch the two molecular orbitals formed by end-on overlap of a carbon 2s atomic orbital with a carbon 2p atomic orbital. Show the bonding and antibonding combinations and their nodes.",
-    labels: ["C 2s + C 2p → bonding MO + antibonding MO"]
-  },
-  {
-    number: "1.37", topic: "Resonance", page: 47,
-    prompt: "Use curved arrows to generate the resonance contributors for each ion.",
-    labels: ["carbonate", "sulfate", "nitrate", "guanidinium", "vinyl ammonium ion"],
-    species: [
-      ["carbonate", "[O-]C(=O)[O-]", "carbonate"],
-      ["nitrate", "[O-][N+](=O)[O-]", "nitrate"],
-      ["guanidinium", "NC(=[NH2+])N", "guanidinium"]
-    ]
-  },
-  {
-    number: "1.38", topic: "Resonance", page: 47,
-    prompt: "For each of the six supplied structures (a–f), use curved arrows to draw three additional resonance contributors.",
-    labels: ["structure (a)", "structure (b)", "structure (c)", "structure (d)", "structure (e)", "structure (f)"],
-    diagramDependent: true
-  },
-  {
-    number: "1.39", topic: "Resonance", page: 48,
-    prompt: "Draw three resonance contributors for each listed species.",
-    labels: ["⁻CH₂NO₂", "CH₃CO₂CH₃", "⁻CH₂CO₂⁻", "HOSO₂O⁻"],
-    species: [
-      ["nitromethyl anion", "[CH2-][N+](=O)[O-]", "nitromethyl anion"],
-      ["methyl acetate", "CC(=O)OC", "methyl acetate"]
-    ]
-  },
-  {
-    number: "1.42", topic: "Resonance", page: 48,
-    prompt: "Draw the resonance contributors for each of the three cyclic conjugated systems shown in parts (a–c).",
-    labels: ["cyclic system (a)", "cyclic system (b)", "cyclic system (c)"],
-    diagramDependent: true
-  },
-  {
-    number: "1.43", topic: "Resonance", page: 48,
-    prompt: "Draw the resonance contributors for the two acyclic conjugated systems shown in parts (a) and (b).",
-    labels: ["acyclic system (a)", "acyclic system (b)"],
-    diagramDependent: true
-  },
-  {
-    number: "1.44", topic: "Resonance", page: 48,
-    prompt: "Write a complete Lewis structure for ozone, then draw its contributing resonance forms. Also find a formally neutral contributor.",
-    species: [["O₃", "[O-][O+]=O", "ozone"]]
-  },
-  {
-    number: "1.45", topic: "Resonance", page: 48,
-    prompt: "Draw two resonance contributors for each of the two compounds shown in the source problem.",
-    labels: ["compound (a): conjugated carbonyl system", "compound (b): N/O-containing system"],
-    diagramDependent: true
-  },
-  {
-    number: "1.48", topic: "Formal charge", page: 49,
-    prompt: "Add formal charges where needed for the four three-membered heterocycles built from CH₂–CH₂ and O, N, Br, or S.",
-    labels: ["O three-membered ring", "N three-membered ring", "Br three-membered ring", "S three-membered ring"]
-  },
-  {
-    number: "1.49", topic: "Formal charge", page: 49,
-    prompt: "Assign formal charges where required across the O-, S-, N-, and P-containing structures in parts (a–l).",
-    labels: ["O series (a–c)", "S series (d–f)", "N series (g–i)", "P series (j–l)"],
-    diagramDependent: true
-  },
-  {
-    number: "1.50", topic: "Formal charge", page: 49,
-    prompt: "Determine the formal charge, if any, on every nitrogen atom in each of the four nitrogen-containing structures (a–d).",
-    labels: ["structure (a)", "structure (b)", "structure (c)", "structure (d)"],
-    diagramDependent: true
-  },
-  {
-    number: "1.51", topic: "Formal charge", page: 49,
-    prompt: "Determine all formal charges in the four carbon/aluminum hydride structures.",
-    labels: ["structure (a)", "structure (b)", "structure (c)", "structure (d)"],
-    diagramDependent: true
-  },
-  {
-    number: "1.52", topic: "Lewis structures", page: 49,
-    prompt: "Draw Lewis dot structures for neutral F₂ and N₂, accounting for the single bond in F₂ and the triple bond in N₂.",
-    species: [
-      ["F₂", "FF", "fluorine"],
-      ["N₂", "N#N", "nitrogen"]
-    ]
-  }
-];
 
-const TOPICS = ["All", "Dipoles", "Lewis structures", "Formal charge", "Resonance", "Molecular orbitals"];
+  "2": {
+    label: "Chapter 2",
+    categories: {
+      "Structure": [
+        ["2.9", "Use the halogens (X = F, Cl, Br, or I) to draw all possible molecules CH₂X₂. For example, CH₂BrCl is one answer.", ""],
+        ["2.10", "Draw all possible molecules of the formula CH₂X₂, CHX₃, and CX₄ when X is F or Cl.", ""],
+        ["2.11", "Draw a structure for the methyl radical at the halfway point for the inversion shown in Figure 2.18. What is the hybridization of the carbon atom in the structure you drew?", "methyl radical inversion: pyramidal → planar → pyramidal"],
+        ["2.18", "Draw three-dimensional structures for (Me)₂CH₂, (CH₃)₄C, (CH₃)₃CH, EtCH₃, (Et)₂, CH₃CH₂CH₃, EtMe, and MeEt.", ""],
+        ["2.19", "Start with the two “different” structures in Figure 2.25a and replace the X group with CH₃ in each. Make three-dimensional drawings of the “two” molecules you’ve created and convince yourself that both your three-dimensional drawings represent the same molecule; there is only one CH₃CH₂CH₃. By all means, use your models.", ""],
+        ["2.20", "Make a three-dimensional drawing of propyl alcohol (CH₃–CH₂–CH₂–OH) and one of the related isopropyl alcohol (CH₃–CHOH–CH₃).", ""]
+      ],
+      "Conformations": [
+        ["2.12", "Draw Newman projections for the staggered conformations of ethyl chloride (CH₃–CH₂–Cl) and 1,2-dichloroethane (Cl–CH₂–CH₂–Cl). In the second case, there are two staggered conformations of different energy. Can you estimate which is more stable?", ""],
+        ["2.13", "Use an orbital interaction diagram like the one for He₂ in Figure 1.48 (p. 42) to show the destabilization in eclipsed ethane. How many eclipsing filled orbital–filled orbital interactions are present?", ""],
+        ["2.16", "Draw the low-energy Newman projection for the structure depicted below by looking down the carbon–carbon bond.", "Eye → H₃C–CH₂OH"],
+        ["2.47", "Use your model set to look down the C(3)–C(4) bond of hexane. Draw the Newman projections for the three staggered and the three eclipsed conformations.", ""],
+        ["2.48", "Use your model set to look down the C(2)–C(3) bond of 2-bromo-3-methylbutane. Draw the Newman projection for all possible staggered conformations. Circle the one you think is the most stable and explain why you’ve chosen that one. Determine the number of gauche interactions in each projection.", ""],
+        ["2.49", "Draw the Newman projections for the different eclipsed and staggered conformations of 2,3-dichlorobutane. Look down the bond joining the two chlorine-bearing carbons. Label each projection as either eclipsed or staggered. In each staggered projection, determine the number and type of gauche interactions.", ""],
+        ["2.50", "Draw Newman projections constructed by looking down the C(1)–C(2) bond of 2-methylpentane. Repeat this process looking down the C(2)–C(3) bond. In each case, indicate which conformations will be the most stable.", ""]
+      ],
+      "Nomenclature & drawings": [
+        ["2.41", "Provide the IUPAC name for each of the following compounds:", "Assigned parts: (f), (h), (i)"],
+        ["2.44", "Redraw the following line structures so that each atom (including hydrogens), each bond, and any lone pairs are clearly shown.", "(a)    (b)    (c)    (d)"],
+        ["2.46", "Draw all the isomers of C₅H₁₁Cl. Give proper systematic names to all of them. Hint: There are eight isomers.", ""]
+      ],
+      "Hybridization": [
+        ["2.52", "What is the approximate hybridization of the indicated carbon in the following compounds?", "(a)    (b)    (c)    (d)    (e)    (f)"],
+        ["2.53", "Indicate the hybridization for each carbon, nitrogen, and oxygen in the molecules shown below. Put a circle around the sp³-hybridized atoms, a triangle around sp²-hybridized atoms, and a box around the sp-hybridized atoms.", "(a) Xanturil    (b) Viquidil"]
+      ]
+    }
+  }
+};
 
 function esc(value) {
   return String(value ?? "")
@@ -238,145 +90,56 @@ function esc(value) {
     .replaceAll('"', "&quot;");
 }
 
-function structureSvg(smiles, id) {
-  try {
-    const molecule = OCL.Molecule.fromSmiles(smiles);
-    if (typeof molecule.inventCoordinates === "function") molecule.inventCoordinates();
-    return molecule.toSVG(240, 145, id, {
-      autoCrop: true,
-      autoCropMargin: 12,
-      factorTextSize: 0.92
-    });
-  } catch {
-    return "";
-  }
-}
-
-function problemCard(problem) {
-  const source = "Jones 5e · p. " + problem.page;
-  const species = (problem.species || []).map((entry, index) => {
-    const [label, smiles, query] = entry;
-    const svg = structureSvg(smiles, "practice-" + problem.number.replace(".", "-") + "-" + index);
-    return `
-      <button type="button" class="species-card" data-open-query="${esc(query || label)}">
-        ${svg ? '<div class="species-svg">' + svg + '</div>' : ""}
-        <span>${esc(label)}</span>
-        <small>open in visualizer</small>
-      </button>`;
-  }).join("");
-
-  const labels = (problem.labels || []).length
-    ? '<div class="setup-list">' + problem.labels.map(x => '<span>' + esc(x) + '</span>').join("") + '</div>'
-    : "";
-
-  return `
-    <article class="problem-card" data-topic="${esc(problem.topic)}" data-number="${esc(problem.number)}">
-      <div class="problem-meta">
-        <strong>Problem ${esc(problem.number)}</strong>
-        <span>${esc(problem.topic)}</span>
-        ${problem.worked ? '<span>worked in text</span>' : ""}
-        <span class="source">${esc(source)}</span>
-      </div>
-      <p>${esc(problem.prompt)}</p>
-      ${species ? '<div class="species-grid">' + species + '</div>' : ""}
-      ${labels}
-      ${problem.diagramDependent ? '<div class="diagram-note">Native redrawing of this source figure is the next fidelity pass; the problem is indexed here now without reproducing the textbook image.</div>' : ""}
-      <label class="scratch-label">Work / notes
-        <textarea class="scratch" data-note-key="ochem-practice-${esc(problem.number)}" placeholder="Your work stays in this browser."></textarea>
-      </label>
-    </article>`;
-}
-
 class OChemPractice extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
-    this.topic = "All";
-    this.search = "";
-    this.shadowRoot.innerHTML = `
-      <link rel="stylesheet" href="${CSS_URL}">
-      <main class="practice-shell">
-        <header class="practice-head">
-          <div>
-            <span class="eyebrow">Practice</span>
-            <h1>Chapter 1</h1>
-            <p>Atoms and Molecules; Orbitals and Bonding · 32 assigned problems</p>
-          </div>
-          <div class="chapter-tabs" role="tablist" aria-label="Practice chapters">
-            <button class="active" type="button">Chapter 1</button>
-            <button type="button" disabled>Chapter 2</button>
-            <button type="button" disabled>Chapter 3</button>
-            <button type="button" disabled>Problem Sets</button>
-            <button type="button" disabled>Mixed</button>
-          </div>
-        </header>
-
-        <section class="practice-controls">
-          <input class="practice-search" type="search" placeholder="Find a problem, molecule, or topic" aria-label="Search Chapter 1 practice">
-          <div class="topic-tabs" role="tablist" aria-label="Filter by topic">
-            ${TOPICS.map((topic, i) => `<button type="button" data-topic-filter="${esc(topic)}" class="${i === 0 ? "active" : ""}">${esc(topic)}</button>`).join("")}
-          </div>
-          <div class="problem-count"></div>
-        </section>
-
-        <section class="problem-grid">
-          ${PROBLEMS.map(problemCard).join("")}
-        </section>
-      </main>`;
+    this.chapter = "1";
+    this.category = Object.keys(CHAPTERS["1"].categories)[0];
+    this.shadowRoot.innerHTML = '<link rel="stylesheet" href="' + CSS_URL + '"><main class="practice-shell"><nav class="chapter-tabs" aria-label="Chapters"></nav><nav class="category-tabs" aria-label="Categories"></nav><section class="problems"></section></main>';
   }
 
   connectedCallback() {
-    this.$(".practice-search").addEventListener("input", event => {
-      this.search = event.target.value.trim().toLowerCase();
-      this.applyFilters();
-    });
-
-    this.$$("[data-topic-filter]").forEach(button => {
-      button.addEventListener("click", () => {
-        this.topic = button.dataset.topicFilter;
-        this.$$("[data-topic-filter]").forEach(b => b.classList.toggle("active", b === button));
-        this.applyFilters();
-      });
-    });
-
-    this.$$("[data-open-query]").forEach(button => {
-      button.addEventListener("click", () => {
-        this.dispatchEvent(new CustomEvent("openvisualizer", {
-          detail: { query: button.dataset.openQuery },
-          bubbles: true,
-          composed: true
-        }));
-      });
-    });
-
-    this.$$(".scratch").forEach(area => {
-      const key = area.dataset.noteKey;
-      try { area.value = localStorage.getItem(key) || ""; } catch {}
-      area.addEventListener("input", () => {
-        try { localStorage.setItem(key, area.value); } catch {}
-      });
-    });
-
-    this.applyFilters();
+    this.render();
   }
 
   $(selector) {
     return this.shadowRoot.querySelector(selector);
   }
 
-  $$(selector) {
-    return Array.from(this.shadowRoot.querySelectorAll(selector));
-  }
+  render() {
+    const chapterNav = this.$(".chapter-tabs");
+    chapterNav.innerHTML = Object.entries(CHAPTERS).map(([key, chapter]) =>
+      '<button type="button" data-chapter="' + key + '" class="' + (key === this.chapter ? "active" : "") + '">' + esc(chapter.label) + '</button>'
+    ).join("");
 
-  applyFilters() {
-    let shown = 0;
-    this.$$(".problem-card").forEach(card => {
-      const topicMatch = this.topic === "All" || card.dataset.topic === this.topic;
-      const textMatch = !this.search || card.textContent.toLowerCase().includes(this.search);
-      card.hidden = !(topicMatch && textMatch);
-      if (!card.hidden) shown += 1;
+    chapterNav.querySelectorAll("[data-chapter]").forEach(button => {
+      button.addEventListener("click", () => {
+        this.chapter = button.dataset.chapter;
+        this.category = Object.keys(CHAPTERS[this.chapter].categories)[0];
+        this.render();
+      });
     });
-    this.$(".problem-count").textContent = shown + " of " + PROBLEMS.length + " problems";
+
+    const categories = CHAPTERS[this.chapter].categories;
+    const categoryNav = this.$(".category-tabs");
+    categoryNav.innerHTML = Object.keys(categories).map(name =>
+      '<button type="button" data-category="' + esc(name) + '" class="' + (name === this.category ? "active" : "") + '">' + esc(name) + '</button>'
+    ).join("");
+
+    categoryNav.querySelectorAll("[data-category]").forEach(button => {
+      button.addEventListener("click", () => {
+        this.category = button.dataset.category;
+        this.render();
+      });
+    });
+
+    this.$(".problems").innerHTML = categories[this.category].map(([number, prompt, figure]) =>
+      '<article class="problem">' +
+        '<p><strong>PROBLEM ' + esc(number) + '</strong> ' + esc(prompt) + '</p>' +
+        (figure ? '<div class="problem-figure">' + esc(figure) + '</div>' : '') +
+      '</article>'
+    ).join("");
   }
 }
 
